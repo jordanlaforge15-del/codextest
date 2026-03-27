@@ -51,3 +51,7 @@ docs/
 - PostgreSQL + Prisma for schema management and migration workflow.
 
 See `docs/architecture.md` and `docs/domain-model.md` for current design decisions.
+
+## Integration test marker
+
+This section is a temporary no-op change used to verify automated task-to-PR integration.
