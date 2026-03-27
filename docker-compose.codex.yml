@@ -1,0 +1,20 @@
+services:
+  codex:
+    image: node:20
+    container_name: workspace-mvp-codex
+    working_dir: /workspace/codextest
+    command: sleep infinity
+    volumes:
+      - .:/workspace/codextest
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/workspace_mvp
+    ports:
+      - '3000:3000'
+      - '4000:4000'
+    networks:
+      - codex-shared
+
+networks:
+  codex-shared:
+    external: true
+    name: workspace-mvp-network

@@ -14,19 +14,27 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
    ```bash
    pnpm install
    ```
-2. Start local PostgreSQL:
+2. Start local PostgreSQL (Compose file 1):
    ```bash
-   docker compose up -d postgres
+   docker compose -f docker-compose.yml up -d postgres
    ```
-3. Run database migration and seed:
+3. Start the Codex/dev container (Compose file 2):
+   ```bash
+   docker compose -f docker-compose.codex.yml up -d codex
+   docker compose -f docker-compose.codex.yml exec codex bash
+   ```
+4. Inside the Codex container, run database migration and seed:
    ```bash
    pnpm --filter @apps/api db:migrate
    pnpm --filter @apps/api db:seed
    ```
-4. Start all apps in development mode:
+5. Inside the Codex container, start all apps in development mode:
    ```bash
    pnpm dev
    ```
+
+> The Codex container connects to PostgreSQL over the shared Docker network `workspace-mvp-network`.
+> Use `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workspace_mvp` from inside the Codex container.
 
 ## Repo layout
 
