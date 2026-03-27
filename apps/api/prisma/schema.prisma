@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemRole {
+  fixed
+  candidate
+}
+
+enum RenderStatus {
+  queued
+  processing
+  complete
+  failed
+}
+
+enum RenderMode {
+  preview
+  high_quality
+}
+
+enum FeedbackRating {
+  yes
+  no
+  maybe
+}
+
+model Workspace {
+  id            String         @id @default(cuid())
+  title         String
+  intentionText String?        @map("intention_text")
+  domainType    String         @map("domain_type")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  items         Item[]
+  renders       Render[]
+  feedback      Feedback[]
+  captureEvents CaptureEvent[]
+
+  @@index([domainType])
+  @@map("workspaces")
+}
+
+model Item {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  sourceUrl       String?  @map("source_url")
+  pageUrl         String?  @map("page_url")
+  imageUrl        String?  @map("image_url")
+  storedImagePath String?  @map("stored_image_path")
+  title           String?
+  brand           String?
+  merchant        String?
+  price           Decimal?
+  currency        String?
+  slotType        String?  @map("slot_type")
+  role            ItemRole @default(candidate)
+  metadataJson    Json     @default("{}") @map("metadata_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, role])
+  @@map("items")
+}
+
+model Render {
+  id                  String       @id @default(cuid())
+  workspaceId         String       @map("workspace_id")
+  status              RenderStatus @default(queued)
+  renderMode          RenderMode   @default(preview) @map("render_mode")
+  selectedItemIds     Json         @map("selected_item_ids")
+  recommendationText  String?      @map("recommendation_text")
+  recommendationLabel String?      @map("recommendation_label")
+  outputImagePath     String?      @map("output_image_path")
+  errorMessage        String?      @map("error_message")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feedback  Feedback[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@map("renders")
+}
+
+model Feedback {
+  id          String         @id @default(cuid())
+  workspaceId String         @map("workspace_id")
+  renderId    String         @map("render_id")
+  rating      FeedbackRating
+  note        String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  render    Render    @relation(fields: [renderId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([renderId])
+  @@map("feedback")
+}
+
+model CaptureEvent {
+  id              String   @id @default(cuid())
+  workspaceId     String   @map("workspace_id")
+  pageUrl         String   @map("page_url")
+  imageUrl        String   @map("image_url")
+  pageTitle       String?  @map("page_title")
+  altText         String?  @map("alt_text")
+  surroundingText String?  @map("surrounding_text")
+  rawPayloadJson  Json     @map("raw_payload_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([workspaceId, createdAt])
+  @@map("capture_events")
+}
