@@ -10,6 +10,8 @@ datasource db {
 enum ItemRole {
   fixed
   candidate
+
+  @@map("item_role")
 }
 
 enum RenderStatus {
@@ -17,17 +19,23 @@ enum RenderStatus {
   processing
   complete
   failed
+
+  @@map("render_status")
 }
 
 enum RenderMode {
   preview
   high_quality
+
+  @@map("render_mode")
 }
 
 enum FeedbackRating {
   yes
   no
   maybe
+
+  @@map("feedback_rating")
 }
 
 model Workspace {
