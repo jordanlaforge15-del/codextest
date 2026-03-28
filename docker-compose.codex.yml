@@ -1,0 +1,36 @@
+services:
+  codex:
+    build:
+      context: .
+      dockerfile: Dockerfile.codex
+    image: workspace-mvp-codex:latest
+    container_name: workspace-mvp-codex
+    working_dir: /workspace/codextest
+    command:
+      - bash
+      - -lc
+      - >
+        corepack enable &&
+        if [ ! -f node_modules/.modules.yaml ]; then
+          corepack pnpm install;
+        fi &&
+        corepack pnpm --filter @apps/api db:generate &&
+        sleep infinity
+    volumes:
+      - .:/workspace/codextest
+      - codex_node_modules:/workspace/codextest/node_modules
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/workspace_mvp
+    ports:
+      - '3000:3000'
+      - '4000:4000'
+    networks:
+      - codex-shared
+
+networks:
+  codex-shared:
+    external: true
+    name: workspace-mvp-network
+
+volumes:
+  codex_node_modules:
