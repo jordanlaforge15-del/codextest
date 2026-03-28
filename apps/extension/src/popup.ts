@@ -6,14 +6,19 @@ interface CaptureSettings {
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
-const form = document.querySelector<HTMLFormElement>('#settings-form');
-const workspaceInput = document.querySelector<HTMLInputElement>('#workspace-id');
-const apiBaseUrlInput = document.querySelector<HTMLInputElement>('#api-base-url');
-const statusElement = document.querySelector<HTMLParagraphElement>('#status');
+const formElement = document.querySelector<HTMLFormElement>('#settings-form');
+const workspaceInputElement = document.querySelector<HTMLInputElement>('#workspace-id');
+const apiBaseUrlInputElement = document.querySelector<HTMLInputElement>('#api-base-url');
+const statusElementValue = document.querySelector<HTMLParagraphElement>('#status');
 
-if (!form || !workspaceInput || !apiBaseUrlInput || !statusElement) {
+if (!formElement || !workspaceInputElement || !apiBaseUrlInputElement || !statusElementValue) {
   throw new Error('Popup UI is missing required elements.');
 }
+
+const form = formElement;
+const workspaceInput = workspaceInputElement;
+const apiBaseUrlInput = apiBaseUrlInputElement;
+const statusElement = statusElementValue;
 
 function setStatus(message: string, isError = false): void {
   statusElement.textContent = message;

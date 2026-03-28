@@ -12,6 +12,19 @@ interface ImageContextMessage {
   };
 }
 
+interface ContextMenuInfo {
+  menuItemId: string;
+  mediaType?: string;
+  pageUrl?: string;
+  srcUrl?: string;
+}
+
+interface BrowserTab {
+  id?: number;
+  url?: string;
+  title?: string;
+}
+
 const CONTEXT_MENU_ID = 'save-image-to-workspace';
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
@@ -44,7 +57,7 @@ async function showNotification(title: string, message: string): Promise<void> {
   });
 }
 
-async function saveCapture(info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab): Promise<void> {
+async function saveCapture(info: ContextMenuInfo, tab?: BrowserTab): Promise<void> {
   const { workspaceId, apiBaseUrl } = await getSettings();
 
   if (!workspaceId) {
@@ -124,7 +137,7 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener((info: ContextMenuInfo, tab: BrowserTab) => {
   if (info.menuItemId !== CONTEXT_MENU_ID) {
     return;
   }
@@ -134,7 +147,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   });
 });
 
-chrome.runtime.onMessage.addListener((message: unknown, sender) => {
+chrome.runtime.onMessage.addListener((message: unknown, sender: { tab?: BrowserTab }) => {
   const typedMessage = message as Partial<ImageContextMessage>;
   if (typedMessage.type !== 'IMAGE_CONTEXT_UPDATED' || !typedMessage.payload || !sender.tab?.id) {
     return;
