@@ -20,7 +20,7 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
    ```
 3. Start the Codex/dev container (Compose file 2):
    ```bash
-   docker compose -f docker-compose.codex.yml up -d codex
+   docker compose -f docker-compose.codex.yml up -d --build codex
    docker compose -f docker-compose.codex.yml exec codex bash
    ```
 4. Inside the Codex container, run database migration and seed:
@@ -34,6 +34,7 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
    ```
 
 > The Codex container connects to PostgreSQL over the shared Docker network `workspace-mvp-network`.
+> The Codex container image installs `@openai/codex` during build so Codex is available inside the container.
 > Use `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workspace_mvp` from inside the Codex container.
 
 ## Repo layout

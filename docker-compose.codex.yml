@@ -1,6 +1,9 @@
 services:
   codex:
-    image: node:20
+    build:
+      context: .
+      dockerfile: Dockerfile.codex
+    image: workspace-mvp-codex:latest
     container_name: workspace-mvp-codex
     working_dir: /workspace/codextest
     command: sleep infinity
