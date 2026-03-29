@@ -1,5 +1,6 @@
 import express from 'express';
 import { errorHandler } from './middleware/error-handler.js';
+import { captureRouter } from './routes/capture-routes.js';
 import { itemRouter } from './routes/item-routes.js';
 import { workspaceRouter } from './routes/workspace-routes.js';
 
@@ -18,6 +19,7 @@ export function createApp() {
 
   app.use(workspaceRouter);
   app.use(itemRouter);
+  app.use(captureRouter);
 
   app.use(errorHandler);
 

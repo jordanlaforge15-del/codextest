@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workspace Capture</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 12px;
+        width: 300px;
+        color: #111827;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      p {
+        font-size: 12px;
+        margin: 6px 0;
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 4px;
+        padding: 6px;
+        font-size: 12px;
+      }
+      button {
+        margin-top: 12px;
+        width: 100%;
+        padding: 8px;
+        border: 0;
+        border-radius: 4px;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      #status {
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Save image to workspace</h1>
+    <p>1) Set workspace ID. 2) Right-click any image. 3) Choose “Save image to workspace”.</p>
+
+    <form id="settings-form">
+      <label for="workspace-id">Workspace ID</label>
+      <input id="workspace-id" name="workspace-id" type="text" placeholder="cma123..." required />
+
+      <label for="api-base-url">API Base URL</label>
+      <input id="api-base-url" name="api-base-url" type="url" placeholder="http://localhost:3000" />
+
+      <button type="submit">Save settings</button>
+    </form>
+
+    <p id="status"></p>
+
+    <script src="src/popup.js" type="module"></script>
+  </body>
+</html>

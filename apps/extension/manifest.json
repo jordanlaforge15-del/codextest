@@ -2,17 +2,21 @@
   "manifest_version": 3,
   "name": "Workspace Capture (MVP)",
   "version": "0.0.1",
-  "description": "Scaffold extension for capturing shopping product images.",
-  "permissions": ["storage"],
+  "description": "Capture webpage images and save them to a workspace.",
+  "permissions": ["activeTab", "contextMenus", "notifications", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "dist/background.js",
+    "service_worker": "src/background.js",
     "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["dist/content.js"]
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
     }
   ]
 }
