@@ -2,7 +2,6 @@ const CONTEXT_MENU_ID = 'save-image-to-workspace';
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 const LOG_PREFIX = '[workspace-capture]';
-const NOTIFICATION_ICON_URL = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111827'/%3E%3Cpath d='M18 32l9 9 19-19' fill='none' stroke='%23f8fafc' stroke-linecap='round' stroke-linejoin='round' stroke-width='6'/%3E%3C/svg%3E";
 const tabImageContext = new Map();
 function log(message, details) {
     if (details === undefined) {
@@ -26,35 +25,16 @@ async function getSettings() {
         apiBaseUrl: raw.apiBaseUrl?.trim() || DEFAULT_API_BASE_URL
     };
 }
-async function showNotification(title, message) {
-    await new Promise((resolve, reject) => {
-        chrome.notifications.create('', {
-            type: 'basic',
-            iconUrl: NOTIFICATION_ICON_URL,
-            title,
-            message
-        }, (notificationId) => {
-            const error = chrome.runtime.lastError;
-            if (error) {
-                reject(new Error(error.message));
-                return;
-            }
-            resolve(notificationId);
-        });
-    });
-}
 async function saveCapture(info, tab) {
     log('saveCapture invoked', { info, tab });
     const { workspaceId, apiBaseUrl } = await getSettings();
     if (!workspaceId) {
         log('Aborting save because workspaceId is missing');
-        await showNotification('Workspace capture failed', 'Set a workspace ID in the extension popup before saving images.');
         return;
     }
     const imageUrl = info.srcUrl;
     if (!imageUrl) {
         log('Aborting save because srcUrl is missing', info);
-        await showNotification('Workspace capture failed', 'No image URL found from context menu action.');
         return;
     }
     const tabId = tab?.id;
@@ -95,6 +75,13 @@ async function saveCapture(info, tab) {
         status: response.status,
         statusText: response.statusText
     });
+    try {
+        const responseBody = (await response.clone().json());
+        log('Capture response body', responseBody);
+    }
+    catch {
+        log('Capture response body was not valid JSON');
+    }
     if (!response.ok) {
         let errorMessage = `Request failed (${response.status})`;
         try {
@@ -109,7 +96,6 @@ async function saveCapture(info, tab) {
         }
         throw new Error(errorMessage);
     }
-    await showNotification('Saved to workspace', `Image saved to workspace ${workspaceId}.`);
     log('Capture saved successfully', { workspaceId, imageUrl });
 }
 chrome.runtime.onInstalled.addListener(() => {
@@ -126,9 +112,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
         log('Ignoring context menu click for unrelated menu item', info.menuItemId);
         return;
     }
-    saveCapture(info, tab).catch(async (error) => {
+    saveCapture(info, tab).catch((error) => {
         log('saveCapture failed', getErrorMessage(error));
-        await showNotification('Workspace capture failed', getErrorMessage(error));
     });
 });
 chrome.runtime.onMessage.addListener((message, sender) => {

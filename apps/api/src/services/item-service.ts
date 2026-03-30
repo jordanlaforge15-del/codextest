@@ -55,23 +55,28 @@ async function assertWorkspaceExists(workspaceId: string): Promise<void> {
   }
 }
 
+export async function resolveStoredImagePath(imageUrl?: string | null): Promise<string | null> {
+  if (!imageUrl) {
+    return null;
+  }
+
+  try {
+    const ingestionResult = await ingestImageFromUrl(imageUrl);
+    return ingestionResult.storedImagePath;
+  } catch (error) {
+    console.error(`Failed to ingest image from ${imageUrl}`, error);
+    return null;
+  }
+}
+
 export async function createItemService(
   workspaceId: string,
   input: Partial<Item>
 ): Promise<Item> {
   await assertWorkspaceExists(workspaceId);
 
-  let storedImagePath = input.storedImagePath ?? null;
-
-  if (input.imageUrl) {
-    try {
-      const ingestionResult = await ingestImageFromUrl(input.imageUrl);
-      storedImagePath = ingestionResult.storedImagePath;
-    } catch (error) {
-      console.error(`Failed to ingest image from ${input.imageUrl}`, error);
-      storedImagePath = null;
-    }
-  }
+  const storedImagePath =
+    input.storedImagePath ?? (await resolveStoredImagePath(input.imageUrl ?? null));
 
   const item = await createItem({
     workspaceId,
