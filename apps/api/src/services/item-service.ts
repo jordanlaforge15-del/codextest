@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { Item } from '@mvp/shared';
 import { HttpError } from '../errors/http-error.js';
 import {
@@ -91,7 +92,7 @@ export async function createItemService(
     currency: input.currency ?? null,
     slotType: input.slotType ?? null,
     role: input.role ?? 'candidate',
-    metadataJson: input.metadataJson ?? {}
+    metadataJson: (input.metadataJson ?? {}) as Prisma.InputJsonValue
   });
 
   return toItemResponse(item);
@@ -127,7 +128,7 @@ export async function updateItemService(
     currency: input.currency,
     slotType: input.slotType,
     role: input.role,
-    metadataJson: input.metadataJson
+    metadataJson: input.metadataJson as Prisma.InputJsonValue | undefined
   });
 
   return toItemResponse(item);

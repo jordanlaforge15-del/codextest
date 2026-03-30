@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { CaptureEvent, Item } from '@mvp/shared';
 import { prisma } from '../config/prisma.js';
 import { HttpError } from '../errors/http-error.js';
@@ -103,7 +104,7 @@ export async function createCaptureService(
         pageTitle: input.page_title ?? null,
         altText: input.alt_text ?? null,
         surroundingText: input.surrounding_text ?? null,
-        rawPayloadJson: input.raw_payload_json ?? {}
+        rawPayloadJson: (input.raw_payload_json ?? {}) as Prisma.InputJsonValue
       }
     });
 
@@ -121,7 +122,7 @@ export async function createCaptureService(
           altText: input.alt_text ?? null,
           surroundingText: input.surrounding_text ?? null,
           rawPayloadJson: input.raw_payload_json ?? {}
-        }
+        } as Prisma.InputJsonValue
       }
     });
 

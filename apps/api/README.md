@@ -1,4 +1,4 @@
-# API (Task 4)
+# API
 
 Base URL (local): `http://localhost:4000`
 
@@ -29,6 +29,12 @@ Base URL (local): `http://localhost:4000`
 - `GET /workspaces/:workspaceId/items`
 - `PATCH /workspaces/:workspaceId/items/:itemId`
 - `DELETE /workspaces/:workspaceId/items/:itemId`
+
+## Renders
+
+- `POST /workspaces/:workspaceId/renders`
+- `GET /workspaces/:workspaceId/renders`
+- `GET /workspaces/:workspaceId/renders/:renderId`
 
 ### Create item request
 
@@ -61,6 +67,18 @@ Environment variables:
 - `IMAGE_FETCH_TIMEOUT_MS` (default: `8000`)
 
 By default, files are written under `<repo>/storage/images` when the API is launched from repo root.
+
+### Render outputs and local asset serving
+
+Render output images are written to a local output directory and served by the API at `/assets/renders/<filename>`.
+
+- `RENDER_OUTPUT_DIR` configures where generated render outputs are stored.
+- The API serializes both `outputImagePath` and `outputImageUrl`.
+- `outputImageUrl` is a browser-usable path relative to the API origin.
+
+Default local output directory:
+
+- `../../storage/renders` from the API package working directory, which resolves to `<repo>/storage/renders`.
 
 ## Response shape
 

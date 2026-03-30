@@ -42,6 +42,7 @@ export interface Render {
   recommendationText: string | null;
   recommendationLabel: string | null;
   outputImagePath: string | null;
+  outputImageUrl: string | null;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;

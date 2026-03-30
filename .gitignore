@@ -8,3 +8,6 @@ build
 coverage
 .DS_Store
 *.log
+storage
+apps/api/storage
+token
