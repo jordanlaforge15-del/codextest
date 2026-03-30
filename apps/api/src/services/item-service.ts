@@ -8,6 +8,7 @@ import {
   updateItemById
 } from '../repositories/item-repository.js';
 import { getWorkspaceById } from '../repositories/workspace-repository.js';
+import { ingestImageFromUrl } from './image-ingestion-service.js';
 
 function toItemResponse(item: {
   id: string;
@@ -60,12 +61,24 @@ export async function createItemService(
 ): Promise<Item> {
   await assertWorkspaceExists(workspaceId);
 
+  let storedImagePath = input.storedImagePath ?? null;
+
+  if (input.imageUrl) {
+    try {
+      const ingestionResult = await ingestImageFromUrl(input.imageUrl);
+      storedImagePath = ingestionResult.storedImagePath;
+    } catch (error) {
+      console.error(`Failed to ingest image from ${input.imageUrl}`, error);
+      storedImagePath = null;
+    }
+  }
+
   const item = await createItem({
     workspaceId,
     sourceUrl: input.sourceUrl ?? null,
     pageUrl: input.pageUrl ?? null,
     imageUrl: input.imageUrl ?? null,
-    storedImagePath: input.storedImagePath ?? null,
+    storedImagePath,
     title: input.title ?? null,
     brand: input.brand ?? null,
     merchant: input.merchant ?? null,

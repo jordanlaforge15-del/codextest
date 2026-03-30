@@ -1,4 +1,4 @@
-# API (Task 3)
+# API (Task 4)
 
 Base URL (local): `http://localhost:4000`
 
@@ -43,6 +43,24 @@ Base URL (local): `http://localhost:4000`
   }
 }
 ```
+
+### Image ingestion and local storage
+
+When `imageUrl` is provided on item creation, the API attempts to download and store the image locally before writing the item row.
+
+- Only `image/*` content types are accepted.
+- Images are rejected if they exceed the configured size limit (default `10MB`).
+- Download timeout is configurable (default `8000ms`).
+- Stored filenames are deterministic (`sha256(imageUrl)` + extension).
+- On ingestion failure, item creation still succeeds and `storedImagePath` is persisted as `null`.
+
+Environment variables:
+
+- `IMAGE_STORAGE_PATH` (default: `storage/images`)
+- `IMAGE_MAX_FILE_SIZE_BYTES` (default: `10485760`)
+- `IMAGE_FETCH_TIMEOUT_MS` (default: `8000`)
+
+By default, files are written under `<repo>/storage/images` when the API is launched from repo root.
 
 ## Response shape
 
