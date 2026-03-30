@@ -16,6 +16,10 @@
         margin: 0 0 10px;
         font-size: 16px;
       }
+      h2 {
+        margin: 14px 0 8px;
+        font-size: 14px;
+      }
       p {
         font-size: 12px;
         margin: 6px 0;
@@ -44,8 +48,41 @@
         font-weight: 600;
         cursor: pointer;
       }
+      button:disabled {
+        cursor: progress;
+        opacity: 0.75;
+      }
       #status {
         min-height: 16px;
+      }
+      .workspace-panel {
+        margin-top: 16px;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 12px;
+      }
+      #workspace-name {
+        font-weight: 600;
+      }
+      #workspace-images {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      #workspace-images img {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 4px;
+        border: 1px solid #e5e7eb;
+      }
+      .workspace-images-empty {
+        margin: 0;
+        grid-column: 1 / -1;
+        color: #6b7280;
+      }
+      #workspace-images-summary {
+        color: #374151;
       }
     </style>
   </head>
@@ -62,6 +99,14 @@
 
       <button type="submit">Save settings</button>
     </form>
+
+    <section class="workspace-panel" aria-live="polite">
+      <h2>Current workspace</h2>
+      <p id="workspace-name">Set a workspace ID to load details.</p>
+      <button id="refresh-workspace" type="button">Refresh workspace</button>
+      <p id="workspace-images-summary">0 images from workspace items</p>
+      <div id="workspace-images"></div>
+    </section>
 
     <p id="status"></p>
 
