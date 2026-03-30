@@ -21,7 +21,6 @@ services:
       - codex_node_modules:/workspace/codextest/node_modules
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/workspace_mvp
-      SSH_AUTH_SOCK: /ssh-agent
     ports:
       - '3000:3000'
       - '4000:4000'
