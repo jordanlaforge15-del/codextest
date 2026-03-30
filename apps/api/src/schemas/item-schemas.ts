@@ -15,7 +15,6 @@ export const createItemSchema = z.object({
   sourceUrl: z.string().url().nullable().optional(),
   pageUrl: z.string().url().nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
-  storedImagePath: z.string().max(500).nullable().optional(),
   title: z.string().max(300).nullable().optional(),
   brand: z.string().max(200).nullable().optional(),
   merchant: z.string().max(200).nullable().optional(),
@@ -26,4 +25,8 @@ export const createItemSchema = z.object({
   metadataJson: jsonRecordSchema.optional().default({})
 });
 
-export const updateItemSchema = createItemSchema.partial();
+export const updateItemSchema = createItemSchema
+  .extend({
+    storedImagePath: z.string().max(500).nullable().optional()
+  })
+  .partial();

@@ -33,9 +33,18 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
    pnpm dev
    ```
 
+<<<<<<< HEAD
 > The Codex container connects to PostgreSQL over the shared Docker network `workspace-mvp-network`.
 > The Codex container image installs `@openai/codex` during build so Codex is available inside the container.
 > Use `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workspace_mvp` from inside the Codex container.
+
+## Local image storage (Task 4)
+
+The API now ingests `imageUrl` values during item creation and stores downloaded files on the local filesystem.
+
+- Default storage path: `storage/images` (configurable via `IMAGE_STORAGE_PATH` in `apps/api/.env`).
+- The API validates `content-type` (`image/*` only), download timeout, and max file size before saving.
+- Failed image ingestion does not fail item creation; `storedImagePath` remains `null`.
 
 ## Repo layout
 

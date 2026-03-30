@@ -2,6 +2,7 @@ import type { CaptureEvent, Item } from '@mvp/shared';
 import { prisma } from '../config/prisma.js';
 import { HttpError } from '../errors/http-error.js';
 import { getWorkspaceById } from '../repositories/workspace-repository.js';
+import { resolveStoredImagePath } from './item-service.js';
 
 export interface CreateCaptureInput {
   page_url: string;
@@ -91,6 +92,7 @@ export async function createCaptureService(
   input: CreateCaptureInput
 ): Promise<CaptureResult> {
   await assertWorkspaceExists(workspaceId);
+  const storedImagePath = await resolveStoredImagePath(input.image_url);
 
   const result = await prisma.$transaction(async (tx) => {
     const capture = await tx.captureEvent.create({
@@ -111,6 +113,7 @@ export async function createCaptureService(
         pageUrl: input.page_url,
         imageUrl: input.image_url,
         sourceUrl: input.image_url,
+        storedImagePath,
         title: input.alt_text ?? input.page_title ?? null,
         role: 'candidate',
         metadataJson: {
