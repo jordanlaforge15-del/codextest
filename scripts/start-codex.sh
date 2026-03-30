@@ -1,10 +1,3 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-cd "${REPO_ROOT}"
-
-docker compose -f docker-compose.codex.yml up -d --build codex
+codex --sandbox danger-full-access --ask-for-approval never

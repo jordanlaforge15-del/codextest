@@ -2,6 +2,7 @@ const CONTEXT_MENU_ID = 'save-image-to-workspace';
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 const LOG_PREFIX = '[workspace-capture]';
+const NOTIFICATION_ICON_URL = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111827'/%3E%3Cpath d='M18 32l9 9 19-19' fill='none' stroke='%23f8fafc' stroke-linecap='round' stroke-linejoin='round' stroke-width='6'/%3E%3C/svg%3E";
 const tabImageContext = new Map();
 function log(message, details) {
     if (details === undefined) {
@@ -26,10 +27,20 @@ async function getSettings() {
     };
 }
 async function showNotification(title, message) {
-    await chrome.notifications.create({
-        type: 'basic',
-        title,
-        message
+    await new Promise((resolve, reject) => {
+        chrome.notifications.create('', {
+            type: 'basic',
+            iconUrl: NOTIFICATION_ICON_URL,
+            title,
+            message
+        }, (notificationId) => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+                reject(new Error(error.message));
+                return;
+            }
+            resolve(notificationId);
+        });
     });
 }
 async function saveCapture(info, tab) {
