@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.codex
+      ssh:
+        - default
     image: workspace-mvp-codex:latest
     container_name: workspace-mvp-codex
     working_dir: /workspace/codextest
@@ -19,8 +21,12 @@ services:
     volumes:
       - .:/workspace/codextest
       - codex_node_modules:/workspace/codextest/node_modules
+      - type: bind
+        source: /run/host-services/ssh-auth.sock
+        target: /run/host-services/ssh-auth.sock
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/workspace_mvp
+      SSH_AUTH_SOCK: /run/host-services/ssh-auth.sock
     ports:
       - '3000:3000'
       - '4000:4000'
