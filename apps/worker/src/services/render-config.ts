@@ -3,6 +3,9 @@ import path from 'node:path';
 
 const DEFAULT_RENDER_OUTPUT_DIR = path.join('..', '..', 'storage', 'renders');
 const DEFAULT_POLL_INTERVAL_MS = 3000;
+const ALLOWED_OPENAI_IMAGE_MODELS = ['gpt-image-1', 'gpt-image-1.5', 'gpt-image-1-mini'] as const;
+
+export type SupportedOpenAIImageModel = (typeof ALLOWED_OPENAI_IMAGE_MODELS)[number];
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
@@ -25,13 +28,33 @@ export function getWorkerPollIntervalMs(): number {
   return parsePositiveInt(process.env.RENDER_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS);
 }
 
-export function getOpenAIImageModel(): string {
-  return process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-1';
+export function getOpenAIImageModel(): SupportedOpenAIImageModel {
+  const model = process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-1';
+
+  if (
+    !ALLOWED_OPENAI_IMAGE_MODELS.includes(model as SupportedOpenAIImageModel)
+  ) {
+    throw new Error(
+      `OPENAI_IMAGE_MODEL must be one of: ${ALLOWED_OPENAI_IMAGE_MODELS.join(', ')}`
+    );
+  }
+
+  return model as SupportedOpenAIImageModel;
 }
 
 export function getOpenAIBaseUrl(): string | undefined {
   const value = process.env.OPENAI_BASE_URL?.trim();
-  return value || undefined;
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    new URL(value);
+  } catch {
+    throw new Error('OPENAI_BASE_URL must be a valid absolute URL');
+  }
+
+  return value;
 }
 
 export function getOpenAIKey(): string {

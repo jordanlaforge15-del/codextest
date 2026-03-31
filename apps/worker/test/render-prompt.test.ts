@@ -42,5 +42,8 @@ describe('buildRenderPrompt', () => {
     expect(prompt).toContain('brand: Alex Mill');
     expect(prompt).toContain('metadata: color: blue, material: cotton');
     expect(prompt).toContain('not a body-specific try-on');
+    expect(prompt).toContain('single person wearing all supplied garments together');
+    expect(prompt).toContain('Preserve garment colors, visible materials, textures');
+    expect(prompt).toContain('Do not invent different garment designs');
   });
 });

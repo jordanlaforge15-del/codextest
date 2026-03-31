@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Item, RenderMode, Workspace } from '@mvp/shared';
-import OpenAI from 'openai';
-import type { ResponseInputContent } from 'openai/resources/responses/responses';
+import OpenAI, { toFile } from 'openai';
 import { buildRenderPrompt } from './render-prompt.js';
 import { getOpenAIBaseUrl, getOpenAIImageModel, getOpenAIKey } from './render-config.js';
 
@@ -38,62 +37,58 @@ export interface GeneratedRenderResult {
   revisedPrompt: string | null;
 }
 
+function getRenderQuality(renderMode: RenderMode): 'high' | 'medium' {
+  switch (renderMode) {
+    case 'high_quality':
+      return 'high';
+    case 'preview':
+      return 'medium';
+    default:
+      throw new Error(`Unsupported render mode: ${renderMode satisfies never}`);
+  }
+}
+
 export async function generateRenderPreview(params: {
   workspace: Workspace;
   items: Item[];
   renderMode: RenderMode;
 }): Promise<GeneratedRenderResult> {
-  const content: ResponseInputContent[] = [
-    {
-      type: 'input_text',
-      text: `${buildRenderPrompt(params.workspace, params.items)}\nRequested quality mode: ${params.renderMode}.`
-    }
-  ];
+  if (params.items.length < 2) {
+    throw new Error('Render generation requires at least two input item images');
+  }
 
+  const uploadImages = [];
   for (const item of params.items) {
     if (!item.storedImagePath) {
       throw new Error(`Item ${item.id} is missing storedImagePath`);
     }
 
     const bytes = await readFile(item.storedImagePath);
-    content.push({
-      type: 'input_image',
-      detail: 'high',
-      image_url: `data:${getMimeType(item.storedImagePath)};base64,${bytes.toString('base64')}`
-    });
+    uploadImages.push(
+      await toFile(bytes, path.basename(item.storedImagePath), {
+        type: getMimeType(item.storedImagePath)
+      })
+    );
   }
 
-  const response = await getOpenAIClient().responses.create({
-    model: 'gpt-4.1-mini',
-    input: [
-      {
-        role: 'user',
-        content
-      }
-    ],
-    tools: [
-      {
-        type: 'image_generation',
-        model: getOpenAIImageModel(),
-        input_fidelity: 'high',
-        size: '1024x1024',
-        quality: params.renderMode === 'high_quality' ? 'high' : 'medium',
-        output_format: 'png'
-      }
-    ],
-    tool_choice: 'required'
+  const response = await getOpenAIClient().images.edit({
+    model: getOpenAIImageModel(),
+    image: uploadImages,
+    prompt: `${buildRenderPrompt(params.workspace, params.items)}\nRequested quality mode: ${params.renderMode}.`,
+    input_fidelity: 'high',
+    size: '1024x1024',
+    quality: getRenderQuality(params.renderMode),
+    output_format: 'png'
   });
 
-  const imageOutput = (response.output as Array<{ type: string; result?: string; revised_prompt?: string }>).find(
-    (entry) => entry.type === 'image_generation_call' && typeof entry.result === 'string'
-  );
+  const imageOutput = response.data?.find((entry) => typeof entry.b64_json === 'string');
 
-  if (!imageOutput?.result) {
-    throw new Error('OpenAI response did not include generated image data');
+  if (!imageOutput?.b64_json) {
+    throw new Error('OpenAI image edit response did not include generated image data');
   }
 
   return {
-    imageBase64: imageOutput.result,
+    imageBase64: imageOutput.b64_json,
     revisedPrompt: imageOutput.revised_prompt ?? null
   };
 }

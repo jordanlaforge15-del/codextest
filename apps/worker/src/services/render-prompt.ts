@@ -25,13 +25,15 @@ export function buildRenderPrompt(workspace: Workspace, items: Item[]): string {
   const itemLines = items.map(describeItem).join('\n');
 
   return [
-    'You are creating a visual style-combination preview from the supplied product images.',
-    'Goal: show how the selected pieces work together visually as a combined concept composition.',
-    'This is not a body-specific try-on or fit simulation.',
-    'Preserve each item’s colors, silhouette, material cues, and general form as closely as possible.',
-    'Use the supplied images as the primary reference for the garments and products in the composition.',
-    'Compose them cleanly into a cohesive outfit or concept board preview with a neutral, product-focused presentation.',
+    'Create one realistic image of a single person wearing all supplied garments together as one coherent outfit.',
+    'This is a garment-composition and outfit-visualization request, not a body-specific try-on or identity-preserving portrait task.',
+    'Use every supplied clothing image as a direct reference input for the final outfit.',
+    'Preserve garment colors, visible materials, textures, trims, closures, and major design features.',
+    'Preserve overall garment proportions and silhouette as closely as possible.',
+    'Do not invent different garment designs or swap the garments for lookalikes.',
+    'Put all supplied garments on the same person in one clean, believable composition.',
     'If there are fixed pieces, treat them as anchors and style the candidate pieces around them.',
+    'Keep the presentation realistic, cohesive, and focused on how the outfit works together visually.',
     `Workspace domain: ${workspace.domainType}`,
     intention,
     'Selected items:',
