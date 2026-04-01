@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   createWorkspaceService,
   getWorkspaceService,
@@ -11,7 +11,7 @@ import {
   workspaceIdParamSchema
 } from '../schemas/workspace-schemas.js';
 
-export const workspaceRouter = Router();
+export const workspaceRouter: RouterType = Router();
 
 workspaceRouter.post('/workspaces', async (req, res, next) => {
   try {

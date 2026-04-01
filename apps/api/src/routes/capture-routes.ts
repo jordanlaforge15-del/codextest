@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { createCaptureSchema, workspaceCapturePathSchema } from '../schemas/capture-schemas.js';
 import { createCaptureService } from '../services/capture-service.js';
 
-export const captureRouter = Router();
+export const captureRouter: RouterType = Router();
 
 captureRouter.post('/workspaces/:workspaceId/captures', async (req, res, next) => {
   try {

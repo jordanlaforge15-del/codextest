@@ -15,18 +15,21 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "express": "^4.21.1",
     "@mvp/shared": "workspace:*",
     "@prisma/client": "^5.22.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^4.21.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/node": "^22.9.0",
-    "tsx": "^4.19.2",
+    "@types/supertest": "^6.0.2",
     "prisma": "^5.22.0",
     "supertest": "^7.0.0",
-    "vitest": "^2.1.4",
-    "@types/supertest": "^6.0.2"
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.4"
   }
 }
