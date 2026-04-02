@@ -66,6 +66,9 @@ function renderItems(items) {
     .map((item) => {
       const previewImage = item.imageUrl || '';
       const storageState = item.storedImagePath ? 'Local image ready' : 'Missing local image';
+      const extraction = item.metadataJson?.extraction || {};
+      const derived = extraction.derived || {};
+      const priceLabel = item.price ? `${item.currency ? `${item.currency} ` : ''}${item.price}` : 'No price';
       return `
         <article class="item-card">
           ${previewImage ? `<img src="${previewImage}" alt="${item.title || 'Workspace item'}" />` : ''}
@@ -79,9 +82,44 @@ function renderItems(items) {
                   <span class="chip">${item.slotType || 'unslotted'}</span>
                 </div>
                 <div>${item.brand || item.merchant || 'Unknown brand'}</div>
+                <div class="render-meta">${item.merchant || 'Unknown merchant'} · ${priceLabel}</div>
                 <div class="render-meta">${storageState}</div>
+                ${
+                  derived.colorName || derived.sku
+                    ? `<div class="render-meta">${[derived.colorName, derived.sku].filter(Boolean).join(' · ')}</div>`
+                    : ''
+                }
               </span>
             </label>
+            <div class="item-editor">
+              <label>
+                Title
+                <input data-field="title" data-item-id="${item.id}" value="${item.title || ''}" />
+              </label>
+              <label>
+                Brand
+                <input data-field="brand" data-item-id="${item.id}" value="${item.brand || ''}" />
+              </label>
+              <label>
+                Merchant
+                <input data-field="merchant" data-item-id="${item.id}" value="${item.merchant || ''}" />
+              </label>
+              <label>
+                Price
+                <input data-field="price" data-item-id="${item.id}" value="${item.price || ''}" />
+              </label>
+              <label>
+                Currency
+                <input data-field="currency" data-item-id="${item.id}" value="${item.currency || ''}" />
+              </label>
+              <label>
+                Slot type
+                <input data-field="slotType" data-item-id="${item.id}" value="${item.slotType || ''}" />
+              </label>
+              <button class="save-item-button" type="button" data-action="save-item" data-item-id="${item.id}">
+                Save metadata
+              </button>
+            </div>
           </div>
         </article>
       `;
@@ -175,8 +213,8 @@ async function createRender() {
     (input) => input.dataset.itemId
   );
 
-  if (!selectedItemIds.length) {
-    setStatus('Select at least one item to render.');
+  if (selectedItemIds.length < 2) {
+    setStatus('Select at least two items to render.');
     return;
   }
 
@@ -204,6 +242,46 @@ async function createRender() {
   }
 }
 
+async function updateItem(itemId) {
+  if (!selectedWorkspaceId) {
+    setStatus('Select a workspace first.');
+    return;
+  }
+
+  const fields = ['title', 'brand', 'merchant', 'price', 'currency', 'slotType'];
+  const payload = {};
+
+  for (const field of fields) {
+    const input = itemsGrid.querySelector(`input[data-item-id="${itemId}"][data-field="${field}"]`);
+    if (!input) {
+      continue;
+    }
+
+    const rawValue = input.value.trim();
+    payload[field] = rawValue || null;
+  }
+
+  setStatus(`Saving metadata for ${itemId}...`);
+
+  try {
+    await fetchJson(
+      `/workspaces/${encodeURIComponent(selectedWorkspaceId)}/items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    setStatus(`Saved metadata for ${itemId}.`);
+    await loadWorkspaceData();
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to update item metadata');
+  }
+}
+
 workspaceSelect.addEventListener('change', async (event) => {
   selectedWorkspaceId = event.target.value;
   await loadWorkspaceData();
@@ -215,6 +293,21 @@ refreshButton.addEventListener('click', async () => {
 
 createRenderButton.addEventListener('click', async () => {
   await createRender();
+});
+
+itemsGrid.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const action = target.dataset.action;
+  const itemId = target.dataset.itemId;
+  if (action !== 'save-item' || !itemId) {
+    return;
+  }
+
+  await updateItem(itemId);
 });
 
 async function bootstrap() {

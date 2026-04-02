@@ -46,6 +46,27 @@ The API now ingests `imageUrl` values during item creation and capture creation,
 - Failed image ingestion does not fail item creation; `storedImagePath` remains `null`.
 - Render outputs are served by the API at `/assets/renders/<filename>`.
 
+## Metadata extraction and normalization (Task 10)
+
+The API performs best-effort metadata extraction when items are created, especially through `POST /workspaces/:workspaceId/captures`.
+
+- Lightweight synchronous extraction runs during item creation and capture creation.
+- The extractor attempts to populate `title`, `merchant`, `brand`, `slotType`, `price`, and `currency`.
+- Additional attributes such as `colorName`, `sizeOptions`, and `sku` are stored under `item.metadataJson.extraction.derived`.
+- Raw capture data remains on `CaptureEvent` (`raw_payload_json`, `page_url`, `image_url`, `alt_text`, `surrounding_text`).
+- Normalized fields are written onto `Item` for rendering, filtering, and manual editing.
+- A non-blocking in-process async enrichment hook runs after capture creation and only fills blank item fields or merges extra extracted metadata.
+- Extraction failures never block item creation; the item is still saved with whatever user-provided or existing values are available.
+- Current extraction is deterministic only. No LLM is required or used in the MVP path.
+
+Extraction strategy:
+
+1. Domain parsing derives `merchant`.
+2. `alt_text`, `page_title`, URL slugs, and capture context are scored to choose a normalized product `title`.
+3. Keyword matching infers `slotType`.
+4. Raw payload keys and regex heuristics attempt `brand`, `price`, `currency`, `colorName`, `sizeOptions`, and `sku`.
+5. Confidence and source details are stored in `metadataJson.extraction`.
+
 ## AI render pipeline (Task 9)
 
 1. The web app loads workspaces and items from the API.
