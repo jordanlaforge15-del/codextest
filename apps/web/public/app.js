@@ -136,6 +136,7 @@ function renderRenders(renders) {
   rendersList.innerHTML = renders
     .map((render) => {
       const outputUrl = resolveAssetUrl(render.outputImageUrl);
+      const voteOptions = ['up', 'neutral', 'down'];
       return `
         <article class="render-card">
           ${outputUrl ? `<img src="${outputUrl}" alt="Render output ${render.id}" />` : ''}
@@ -147,6 +148,25 @@ function renderRenders(renders) {
             <h3>${render.id}</h3>
             <div class="render-meta">Selected items: ${render.selectedItemIds.length}</div>
             <div class="render-meta">Updated: ${new Date(render.updatedAt).toLocaleString()}</div>
+            <div class="vote-controls" role="group" aria-label="Vote on render ${render.id}">
+              ${voteOptions
+                .map(
+                  (vote) => `
+                    <button
+                      type="button"
+                      class="vote-button"
+                      data-action="vote-render"
+                      data-render-id="${render.id}"
+                      data-vote="${vote}"
+                      aria-pressed="${render.currentVote === vote ? 'true' : 'false'}"
+                      data-selected="${render.currentVote === vote ? 'true' : 'false'}"
+                    >
+                      ${vote}
+                    </button>
+                  `
+                )
+                .join('')}
+            </div>
             ${render.errorMessage ? `<p class="render-error">${render.errorMessage}</p>` : ''}
             ${render.recommendationText ? `<p class="render-meta">${render.recommendationText}</p>` : ''}
           </div>
@@ -282,6 +302,33 @@ async function updateItem(itemId) {
   }
 }
 
+async function voteOnRender(renderId, vote) {
+  if (!selectedWorkspaceId) {
+    setStatus('Select a workspace first.');
+    return;
+  }
+
+  setStatus(`Saving ${vote} vote for ${renderId}...`);
+
+  try {
+    await fetchJson(
+      `/workspaces/${encodeURIComponent(selectedWorkspaceId)}/renders/${encodeURIComponent(renderId)}/vote`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ vote })
+      }
+    );
+
+    setStatus(`Saved ${vote} vote for ${renderId}.`);
+    await loadWorkspaceData();
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to save render vote');
+  }
+}
+
 workspaceSelect.addEventListener('change', async (event) => {
   selectedWorkspaceId = event.target.value;
   await loadWorkspaceData();
@@ -308,6 +355,22 @@ itemsGrid.addEventListener('click', async (event) => {
   }
 
   await updateItem(itemId);
+});
+
+rendersList.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const action = target.dataset.action;
+  const renderId = target.dataset.renderId;
+  const vote = target.dataset.vote;
+  if (action !== 'vote-render' || !renderId || !vote) {
+    return;
+  }
+
+  await voteOnRender(renderId, vote);
 });
 
 async function bootstrap() {

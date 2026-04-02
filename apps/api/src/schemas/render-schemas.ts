@@ -13,3 +13,7 @@ export const createRenderSchema = z.object({
   selectedItemIds: z.array(z.string().min(1)).min(2),
   renderMode: z.enum(['preview', 'high_quality']).optional().default('preview')
 });
+
+export const renderVoteSchema = z.object({
+  vote: z.enum(['up', 'neutral', 'down'])
+});

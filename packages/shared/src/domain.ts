@@ -32,6 +32,7 @@ export interface Item {
 
 export type RenderStatus = 'queued' | 'processing' | 'complete' | 'failed';
 export type RenderMode = 'preview' | 'high_quality';
+export type RenderVoteValue = 'up' | 'neutral' | 'down';
 
 export interface Render {
   id: string;
@@ -44,19 +45,18 @@ export interface Render {
   outputImagePath: string | null;
   outputImageUrl: string | null;
   errorMessage: string | null;
+  currentVote: RenderVoteValue | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export type FeedbackRating = 'yes' | 'no' | 'maybe';
-
-export interface Feedback {
+export interface RenderVote {
   id: string;
   workspaceId: string;
   renderId: string;
-  rating: FeedbackRating;
-  note: string | null;
+  vote: RenderVoteValue;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CaptureEvent {
