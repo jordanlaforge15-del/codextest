@@ -32,19 +32,43 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
    ```bash
    pnpm dev
    ```
-
-<<<<<<< HEAD
 > The Codex container connects to PostgreSQL over the shared Docker network `workspace-mvp-network`.
 > The Codex container image installs `@openai/codex` during build so Codex is available inside the container.
 > Use `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workspace_mvp` from inside the Codex container.
 
-## Local image storage (Task 4)
+## Local image and render storage
 
-The API now ingests `imageUrl` values during item creation and stores downloaded files on the local filesystem.
+The API now ingests `imageUrl` values during item creation and capture creation, and the worker stores AI-generated render outputs on the local filesystem.
 
-- Default storage path: `storage/images` (configurable via `IMAGE_STORAGE_PATH` in `apps/api/.env`).
+- Default item image storage path: `storage/images` (configurable via `IMAGE_STORAGE_PATH`).
+- Default render output path: `storage/renders` (configurable via `RENDER_OUTPUT_DIR`).
 - The API validates `content-type` (`image/*` only), download timeout, and max file size before saving.
 - Failed image ingestion does not fail item creation; `storedImagePath` remains `null`.
+- Render outputs are served by the API at `/assets/renders/<filename>`.
+
+## AI render pipeline (Task 9)
+
+1. The web app loads workspaces and items from the API.
+2. The user selects saved items and creates a render request with `POST /workspaces/:workspaceId/renders`.
+3. The API persists a render row in `queued` status.
+4. The worker polls queued renders, marks the job `processing`, loads the workspace and selected item images, and calls the OpenAI Responses API with the `image_generation` tool.
+5. The worker stores the generated image locally, updates the render to `complete`, and saves `outputImagePath`.
+6. If OpenAI or local asset validation fails, the worker marks the render `failed` and saves a useful error message.
+
+Required environment variables for AI rendering:
+
+- `OPENAI_API_KEY`
+- `OPENAI_IMAGE_MODEL` (optional, default `gpt-image-1`)
+- `OPENAI_BASE_URL` (optional)
+- `RENDER_OUTPUT_DIR` (optional)
+
+Human setup:
+
+1. Create an OpenAI API key in the OpenAI dashboard.
+2. Export it locally, for example `export OPENAI_API_KEY=...`.
+3. Ensure the API server and worker are started from the same environment or both receive that env var.
+4. Never place the key in frontend code, extension code, or committed source files.
+5. Start the API, worker, and web app, then queue a render from the web UI.
 
 ## Repo layout
 
