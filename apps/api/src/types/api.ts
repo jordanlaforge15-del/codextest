@@ -1,4 +1,4 @@
-import type { Item, Render, Workspace } from '@mvp/shared';
+import type { Item, Render, RenderVote, Workspace } from '@mvp/shared';
 
 export interface ApiResponse<T> {
   data: T;
@@ -10,3 +10,4 @@ export interface ItemListResponse extends ApiResponse<Item[]> {}
 export interface ItemResponse extends ApiResponse<Item> {}
 export interface RenderListResponse extends ApiResponse<Render[]> {}
 export interface RenderResponse extends ApiResponse<Render> {}
+export interface RenderVoteResponse extends ApiResponse<RenderVote> {}

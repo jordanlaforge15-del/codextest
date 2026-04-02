@@ -30,12 +30,12 @@ enum RenderMode {
   @@map("render_mode")
 }
 
-enum FeedbackRating {
-  yes
-  no
-  maybe
+enum RenderVoteValue {
+  up
+  neutral
+  down
 
-  @@map("feedback_rating")
+  @@map("render_vote_value")
 }
 
 model Workspace {
@@ -47,7 +47,7 @@ model Workspace {
   updatedAt     DateTime       @updatedAt @map("updated_at")
   items         Item[]
   renders       Render[]
-  feedback      Feedback[]
+  renderVotes   RenderVote[]
   captureEvents CaptureEvent[]
 
   @@index([domainType])
@@ -93,27 +93,26 @@ model Render {
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  feedback  Feedback[]
+  vote      RenderVote?
 
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@map("renders")
 }
 
-model Feedback {
-  id          String         @id @default(cuid())
-  workspaceId String         @map("workspace_id")
-  renderId    String         @map("render_id")
-  rating      FeedbackRating
-  note        String?
-  createdAt   DateTime       @default(now()) @map("created_at")
+model RenderVote {
+  id          String          @id @default(cuid())
+  workspaceId String          @map("workspace_id")
+  renderId    String          @unique @map("render_id")
+  vote        RenderVoteValue
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   render    Render    @relation(fields: [renderId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
-  @@index([renderId])
-  @@map("feedback")
+  @@map("render_votes")
 }
 
 model CaptureEvent {

@@ -91,6 +91,28 @@ Human setup:
 4. Never place the key in frontend code, extension code, or committed source files.
 5. Start the API, worker, and web app, then queue a render from the web UI.
 
+## Render voting (Task 11a)
+
+Render history now supports one persisted local vote per render.
+
+- Vote values are `up`, `neutral`, and `down`.
+- Votes are stored in a dedicated `render_votes` table.
+- The previous generic `feedback` model was replaced with `RenderVote` to keep this slice explicit.
+- In the current single-user MVP, each render has at most one current vote.
+- The design is intentionally simple so a future `user_id` can be added and the uniqueness rule can evolve to `(render_id, user_id)`.
+
+API endpoints:
+
+- `GET /workspaces/:workspaceId/renders/:renderId/vote`
+- `PUT /workspaces/:workspaceId/renders/:renderId/vote`
+
+Render responses from:
+
+- `GET /workspaces/:workspaceId/renders`
+- `GET /workspaces/:workspaceId/renders/:renderId`
+
+also include `currentVote`, so the web app can render vote state without an extra request per render.
+
 ## Repo layout
 
 ```text

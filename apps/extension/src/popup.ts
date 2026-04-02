@@ -1,4 +1,4 @@
-import type { Item, Render, RenderMode, Workspace } from '@mvp/shared';
+import type { Item, Render, RenderMode, RenderVote, RenderVoteValue, Workspace } from '@mvp/shared';
 
 interface CaptureSettings {
   workspaceId: string;
@@ -19,6 +19,10 @@ interface RenderListResponse {
 
 interface RenderResponse {
   data: Render;
+}
+
+interface RenderVoteResponse {
+  data: RenderVote | null;
 }
 
 interface PopupState {
@@ -268,6 +272,11 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
 
     card.append(header, meta);
 
+    const voteStatus = document.createElement('p');
+    voteStatus.className = 'render-card-meta';
+    voteStatus.textContent = `Vote: ${render.currentVote ?? 'not rated'}`;
+    card.append(voteStatus);
+
     const imageUrl = getRenderImageUrl(apiBaseUrl, render);
     if (imageUrl) {
       const image = document.createElement('img');
@@ -285,6 +294,23 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
       card.append(link);
     }
 
+    const voteControls = document.createElement('div');
+    voteControls.className = 'vote-controls';
+
+    for (const vote of ['up', 'neutral', 'down'] as RenderVoteValue[]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'vote-button';
+      button.dataset.selected = render.currentVote === vote ? 'true' : 'false';
+      button.textContent = vote;
+      button.addEventListener('click', async () => {
+        await submitRenderVote(render.id, vote);
+      });
+      voteControls.append(button);
+    }
+
+    card.append(voteControls);
+
     if (render.errorMessage) {
       const error = document.createElement('p');
       error.className = 'render-card-error';
@@ -293,6 +319,56 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
     }
 
     workspaceRenders.append(card);
+  }
+}
+
+async function submitRenderVote(renderId: string, vote: RenderVoteValue): Promise<RenderVote | null> {
+  const workspaceId = getWorkspaceId();
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (!workspaceId) {
+    setStatus('Set a workspace ID before rating renders.', true);
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/renders/${encodeURIComponent(renderId)}/vote`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ vote })
+      }
+    );
+
+    if (!response.ok) {
+      let errorMessage = `Unable to save render vote (${response.status}).`;
+      try {
+        const body = (await response.json()) as { error?: { message?: string } };
+        if (body.error?.message) {
+          errorMessage = body.error.message;
+        }
+      } catch {
+        // Ignore JSON parse failures.
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const payload = (await response.json()) as RenderVoteResponse;
+    const targetRender = state.renders.find((render) => render.id === renderId);
+    if (targetRender) {
+      targetRender.currentVote = payload.data?.vote ?? null;
+      renderWorkspaceRenders(state.renders, apiBaseUrl);
+    }
+
+    setStatus(`Saved ${vote} vote for render ${renderId}.`);
+    return payload.data;
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to save render vote.', true);
+    return null;
   }
 }
 

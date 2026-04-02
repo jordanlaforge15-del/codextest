@@ -23,6 +23,9 @@ function toRenderResponse(render: {
   recommendationLabel: string | null;
   outputImagePath: string | null;
   errorMessage: string | null;
+  vote?: {
+    vote: 'up' | 'neutral' | 'down';
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }): RenderDto {
@@ -37,6 +40,7 @@ function toRenderResponse(render: {
     outputImagePath: render.outputImagePath,
     outputImageUrl: toRenderOutputUrl(render.outputImagePath),
     errorMessage: render.errorMessage,
+    currentVote: render.vote?.vote ?? null,
     createdAt: render.createdAt.toISOString(),
     updatedAt: render.updatedAt.toISOString()
   };
@@ -70,7 +74,7 @@ export async function createRenderService(
     errorMessage: null
   });
 
-  return toRenderResponse(render);
+  return toRenderResponse({ ...render, vote: null });
 }
 
 export async function listRendersService(workspaceId: string): Promise<RenderDto[]> {
