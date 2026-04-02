@@ -9,6 +9,10 @@ export async function listItemsByWorkspace(workspaceId: string): Promise<Item[]>
   return prisma.item.findMany({ where: { workspaceId }, orderBy: { createdAt: 'desc' } });
 }
 
+export async function listItemsByIds(ids: string[]): Promise<Item[]> {
+  return prisma.item.findMany({ where: { id: { in: ids } } });
+}
+
 export async function getItemById(id: string): Promise<Item | null> {
   return prisma.item.findUnique({ where: { id } });
 }

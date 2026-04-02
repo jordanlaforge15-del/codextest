@@ -9,8 +9,9 @@
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 12px;
-        width: 300px;
+        width: 360px;
         color: #111827;
+        background: #f8fafc;
       }
       h1 {
         margin: 0 0 10px;
@@ -31,6 +32,13 @@
         font-weight: 600;
       }
       input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 4px;
+        padding: 6px;
+        font-size: 12px;
+      }
+      select {
         width: 100%;
         box-sizing: border-box;
         margin-top: 4px;
@@ -63,39 +71,136 @@
       #workspace-name {
         font-weight: 600;
       }
-      #workspace-images {
-        margin-top: 8px;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
+      .panel-actions {
+        display: flex;
+        gap: 8px;
       }
-      #workspace-images img {
+      .panel-actions button {
+        margin-top: 0;
+      }
+      #workspace-items,
+      #workspace-renders {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .item-card,
+      .render-card {
+        background: #ffffff;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        padding: 8px;
+      }
+      .item-card {
+        display: grid;
+        grid-template-columns: auto 72px 1fr;
+        gap: 8px;
+        align-items: start;
+        margin-top: 0;
+        font-weight: 400;
+      }
+      .item-card input {
+        width: auto;
+        margin: 4px 0 0;
+      }
+      .item-card-preview img,
+      .render-card-image {
         width: 100%;
         aspect-ratio: 1 / 1;
         object-fit: cover;
         border-radius: 4px;
         border: 1px solid #e5e7eb;
       }
-      .workspace-images-empty {
+      .item-card-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 4px;
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 11px;
+      }
+      .item-card-title,
+      .render-card-title {
         margin: 0;
-        grid-column: 1 / -1;
+        font-weight: 600;
+      }
+      .item-card-meta,
+      .item-card-status,
+      .render-card-meta,
+      .render-card-error {
+        margin: 4px 0 0;
+        color: #475569;
+      }
+      .item-card-status.is-ready {
+        color: #166534;
+      }
+      .item-card-status.is-blocked,
+      .render-card-error {
+        color: #b91c1c;
+      }
+      .render-controls {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+      .render-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .render-status {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .render-status.is-queued {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+      .render-status.is-processing {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .render-status.is-complete {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .render-status.is-failed {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .empty-state {
+        margin: 0;
         color: #6b7280;
       }
-      #workspace-images-summary {
+      #workspace-items-summary,
+      #workspace-renders-summary {
         color: #374151;
       }
     </style>
   </head>
   <body>
-    <h1>Save image to workspace</h1>
-    <p>1) Set workspace ID. 2) Right-click any image. 3) Choose “Save image to workspace”.</p>
+    <h1>Workspace Stylist</h1>
+    <p>Save clothing images to a workspace, select pieces, create renders, and review results.</p>
 
     <form id="settings-form">
       <label for="workspace-id">Workspace ID</label>
       <input id="workspace-id" name="workspace-id" type="text" placeholder="cma123..." required />
 
       <label for="api-base-url">API Base URL</label>
-      <input id="api-base-url" name="api-base-url" type="url" placeholder="http://localhost:3000" />
+      <input id="api-base-url" name="api-base-url" type="url" placeholder="http://localhost:4000" />
 
       <button type="submit">Save settings</button>
     </form>
@@ -103,13 +208,33 @@
     <section class="workspace-panel" aria-live="polite">
       <h2>Current workspace</h2>
       <p id="workspace-name">Set a workspace ID to load details.</p>
-      <button id="refresh-workspace" type="button">Refresh workspace</button>
-      <p id="workspace-images-summary">0 images from workspace items</p>
-      <div id="workspace-images"></div>
+      <div class="panel-actions">
+        <button id="refresh-workspace" type="button">Refresh workspace</button>
+      </div>
+      <p id="workspace-items-summary">0 render-ready items out of 0</p>
+      <div id="workspace-items"></div>
+
+      <div class="render-controls">
+        <label for="render-mode">Render mode</label>
+        <select id="render-mode" name="render-mode">
+          <option value="preview" selected>Preview</option>
+          <option value="high_quality">High quality</option>
+        </select>
+        <button id="submit-render" type="button">Create render</button>
+      </div>
+    </section>
+
+    <section class="workspace-panel" aria-live="polite">
+      <h2>Renders</h2>
+      <div class="panel-actions">
+        <button id="refresh-renders" type="button">Refresh renders</button>
+      </div>
+      <p id="workspace-renders-summary">0 renders in this workspace</p>
+      <div id="workspace-renders"></div>
     </section>
 
     <p id="status"></p>
 
-    <script src="src/popup.js" type="module"></script>
+    <script src="dist/popup.js" type="module"></script>
   </body>
 </html>

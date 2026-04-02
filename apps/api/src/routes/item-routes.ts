@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   createItemSchema,
   itemPathParamsSchema,
@@ -12,7 +12,7 @@ import {
   updateItemService
 } from '../services/item-service.js';
 
-export const itemRouter = Router();
+export const itemRouter: RouterType = Router();
 
 itemRouter.post('/workspaces/:workspaceId/items', async (req, res, next) => {
   try {
