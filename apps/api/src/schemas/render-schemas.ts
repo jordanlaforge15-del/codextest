@@ -10,6 +10,6 @@ export const renderPathParamsSchema = z.object({
 });
 
 export const createRenderSchema = z.object({
-  selectedItemIds: z.array(z.string().min(1)).min(1),
+  selectedItemIds: z.array(z.string().min(1)).min(2),
   renderMode: z.enum(['preview', 'high_quality']).optional().default('preview')
 });

@@ -27,7 +27,7 @@ interface BrowserTab {
 
 const CONTEXT_MENU_ID = 'save-image-to-workspace';
 const SETTINGS_KEY = 'captureSettings';
-const DEFAULT_API_BASE_URL = 'http://localhost:3000';
+const DEFAULT_API_BASE_URL = 'http://localhost:4000';
 const LOG_PREFIX = '[workspace-capture]';
 
 const tabImageContext = new Map<number, ImageContextMessage['payload']>();
