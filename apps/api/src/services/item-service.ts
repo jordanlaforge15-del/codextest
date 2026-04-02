@@ -10,6 +10,10 @@ import {
 } from '../repositories/item-repository.js';
 import { getWorkspaceById } from '../repositories/workspace-repository.js';
 import { ingestImageFromUrl } from './image-ingestion-service.js';
+import {
+  buildNormalizedItemFields,
+  extractMetadata
+} from './metadata-extraction-service.js';
 
 function toItemResponse(item: {
   id: string;
@@ -78,6 +82,19 @@ export async function createItemService(
 
   const storedImagePath =
     input.storedImagePath ?? (await resolveStoredImagePath(input.imageUrl ?? null));
+  const extracted = (() => {
+    try {
+      return extractMetadata({
+        pageUrl: input.pageUrl,
+        imageUrl: input.imageUrl,
+        pageTitle: input.title
+      });
+    } catch (error) {
+      console.error('Failed to extract item metadata', error);
+      return extractMetadata({});
+    }
+  })();
+  const normalizedFields = buildNormalizedItemFields(input, extracted);
 
   const item = await createItem({
     workspaceId,
@@ -85,14 +102,14 @@ export async function createItemService(
     pageUrl: input.pageUrl ?? null,
     imageUrl: input.imageUrl ?? null,
     storedImagePath,
-    title: input.title ?? null,
-    brand: input.brand ?? null,
-    merchant: input.merchant ?? null,
-    price: input.price ?? null,
-    currency: input.currency ?? null,
-    slotType: input.slotType ?? null,
+    title: normalizedFields.title,
+    brand: normalizedFields.brand,
+    merchant: normalizedFields.merchant,
+    price: normalizedFields.price,
+    currency: normalizedFields.currency,
+    slotType: normalizedFields.slotType,
     role: input.role ?? 'candidate',
-    metadataJson: (input.metadataJson ?? {}) as Prisma.InputJsonValue
+    metadataJson: normalizedFields.metadataJson as Prisma.InputJsonValue
   });
 
   return toItemResponse(item);

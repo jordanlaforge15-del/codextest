@@ -3,6 +3,12 @@ import type { CaptureEvent, Item } from '@mvp/shared';
 import { prisma } from '../config/prisma.js';
 import { HttpError } from '../errors/http-error.js';
 import { getWorkspaceById } from '../repositories/workspace-repository.js';
+import {
+  buildNormalizedItemFields,
+  extractMetadata,
+  mergeExtractedMetadata
+} from './metadata-extraction-service.js';
+import { queueItemMetadataEnrichment } from './metadata-enrichment-service.js';
 import { resolveStoredImagePath } from './item-service.js';
 
 export interface CreateCaptureInput {
@@ -94,6 +100,32 @@ export async function createCaptureService(
 ): Promise<CaptureResult> {
   await assertWorkspaceExists(workspaceId);
   const storedImagePath = await resolveStoredImagePath(input.image_url);
+  const extracted = (() => {
+    try {
+      return extractMetadata({
+        pageUrl: input.page_url,
+        imageUrl: input.image_url,
+        pageTitle: input.page_title,
+        altText: input.alt_text,
+        surroundingText: input.surrounding_text,
+        rawPayloadJson: input.raw_payload_json
+      });
+    } catch (error) {
+      console.error('Failed to extract capture metadata', error);
+      return extractMetadata({});
+    }
+  })();
+  const normalizedFields = buildNormalizedItemFields(
+    {
+      metadataJson: {
+        captureContext: {
+          altText: input.alt_text ?? null,
+          surroundingText: input.surrounding_text ?? null
+        }
+      }
+    },
+    extracted
+  );
 
   const result = await prisma.$transaction(async (tx) => {
     const capture = await tx.captureEvent.create({
@@ -115,18 +147,30 @@ export async function createCaptureService(
         imageUrl: input.image_url,
         sourceUrl: input.image_url,
         storedImagePath,
-        title: input.alt_text ?? input.page_title ?? null,
+        title: normalizedFields.title ?? input.alt_text ?? input.page_title ?? null,
+        merchant: normalizedFields.merchant,
+        brand: normalizedFields.brand,
+        price: normalizedFields.price,
+        currency: normalizedFields.currency,
+        slotType: normalizedFields.slotType,
         role: 'candidate',
-        metadataJson: {
+        metadataJson: mergeExtractedMetadata(normalizedFields.metadataJson, {
           captureEventId: capture.id,
-          altText: input.alt_text ?? null,
-          surroundingText: input.surrounding_text ?? null,
           rawPayloadJson: input.raw_payload_json ?? {}
-        } as Prisma.InputJsonValue
+        }) as Prisma.InputJsonValue
       }
     });
 
     return { capture, item };
+  });
+
+  queueItemMetadataEnrichment(result.item.id, {
+    pageUrl: input.page_url,
+    imageUrl: input.image_url,
+    pageTitle: input.page_title,
+    altText: input.alt_text,
+    surroundingText: input.surrounding_text,
+    rawPayloadJson: input.raw_payload_json
   });
 
   return {

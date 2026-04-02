@@ -221,6 +221,34 @@ body {
   margin-top: 4px;
 }
 
+.item-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.item-editor label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.item-editor input,
+.save-item-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+}
+
+.save-item-button {
+  cursor: pointer;
+  color: var(--text);
+}
+
 .render-error {
   color: var(--danger);
 }
