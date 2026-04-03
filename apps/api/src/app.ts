@@ -2,6 +2,7 @@ import 'dotenv/config';
 import path from 'node:path';
 import cors from 'cors';
 import express, { type Express } from 'express';
+import { authRouter } from './routes/auth-routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { captureRouter } from './routes/capture-routes.js';
 import { itemRouter } from './routes/item-routes.js';
@@ -24,6 +25,7 @@ export function createApp(): Express {
     });
   });
 
+  app.use(authRouter);
   app.use(workspaceRouter);
   app.use(itemRouter);
   app.use(captureRouter);
