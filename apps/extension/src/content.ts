@@ -21,6 +21,9 @@ const BUTTON_ID = 'workspace-capture-inline-button';
 const BUTTON_BASE_TEXT = 'Save image';
 const BUTTON_SUCCESS_TEXT = 'Saved ✓';
 const BUTTON_ERROR_TEXT = 'Failed ✕';
+const BUTTON_MARGIN = 8;
+const FALLBACK_BUTTON_WIDTH = 96;
+const FALLBACK_BUTTON_HEIGHT = 32;
 
 let activeImage: HTMLImageElement | null = null;
 let resetTimer: number | null = null;
@@ -92,8 +95,26 @@ function getButtonCoordinates(image: HTMLImageElement): { top: number; left: num
     return null;
   }
 
-  const top = Math.max(8, rect.top + 8);
-  const left = Math.max(8, rect.right - saveButton.offsetWidth - 8);
+  const previousDisplay = saveButton.style.display;
+  const previousVisibility = saveButton.style.visibility;
+
+  if (previousDisplay === 'none') {
+    saveButton.style.visibility = 'hidden';
+    saveButton.style.display = 'block';
+  }
+
+  const buttonWidth = saveButton.offsetWidth || FALLBACK_BUTTON_WIDTH;
+  const buttonHeight = saveButton.offsetHeight || FALLBACK_BUTTON_HEIGHT;
+
+  if (previousDisplay === 'none') {
+    saveButton.style.display = previousDisplay;
+    saveButton.style.visibility = previousVisibility;
+  }
+
+  const maxTop = Math.max(BUTTON_MARGIN, window.innerHeight - buttonHeight - BUTTON_MARGIN);
+  const maxLeft = Math.max(BUTTON_MARGIN, window.innerWidth - buttonWidth - BUTTON_MARGIN);
+  const top = Math.min(Math.max(BUTTON_MARGIN, rect.top + BUTTON_MARGIN), maxTop);
+  const left = Math.min(Math.max(BUTTON_MARGIN, rect.right - buttonWidth - BUTTON_MARGIN), maxLeft);
   return { top, left };
 }
 
