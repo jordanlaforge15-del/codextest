@@ -44,6 +44,37 @@ saveButton.style.cursor = 'pointer';
 saveButton.style.boxShadow = '0 3px 12px rgba(0, 0, 0, 0.2)';
 saveButton.style.display = 'none';
 
+function getButtonContainer(): ParentNode | null {
+  if (document.body) {
+    return document.body;
+  }
+
+  if (document.documentElement) {
+    return document.documentElement;
+  }
+
+  return null;
+}
+
+function mountSaveButton(): void {
+  const container = getButtonContainer();
+  if (container) {
+    container.append(saveButton);
+    return;
+  }
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+      const readyContainer = getButtonContainer();
+      if (readyContainer) {
+        readyContainer.append(saveButton);
+      }
+    },
+    { once: true }
+  );
+}
+
 function setButtonState(state: 'idle' | 'saving' | 'success' | 'error', errorMessage?: string): void {
   if (resetTimer !== null) {
     window.clearTimeout(resetTimer);
@@ -182,13 +213,21 @@ async function saveActiveImage(): Promise<void> {
   setButtonState('error', response.error);
 }
 
-document.body.append(saveButton);
+mountSaveButton();
 
-saveButton.addEventListener('click', () => {
+saveButton.addEventListener('click', (event) => {
+  if (!event.isTrusted) {
+    return;
+  }
+
   void saveActiveImage();
 });
 
-saveButton.addEventListener('mouseenter', () => {
+saveButton.addEventListener('mouseenter', (event) => {
+  if (!event.isTrusted) {
+    return;
+  }
+
   if (activeImage) {
     positionButton(activeImage);
   }
@@ -197,6 +236,10 @@ saveButton.addEventListener('mouseenter', () => {
 document.addEventListener(
   'mousemove',
   (event) => {
+    if (!event.isTrusted) {
+      return;
+    }
+
     maybeShowButtonForTarget(event.target);
   },
   true

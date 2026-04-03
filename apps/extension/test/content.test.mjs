@@ -28,7 +28,11 @@ class MockElement {
   }
 
   contains(target) {
-    return this.children.includes(target);
+    if (this.children.includes(target)) {
+      return true;
+    }
+
+    return this.children.some((child) => child.contains?.(target));
   }
 
   closest(selector) {
@@ -64,9 +68,11 @@ class MockImageElement extends MockElement {
 function createDocument() {
   const listeners = new Map();
   const body = new MockElement('body');
+  const documentElement = new MockElement('html');
 
   return {
     body,
+    documentElement,
     title: 'Fixture page',
     createElement(tagName) {
       const element = new MockElement(tagName);
@@ -133,11 +139,103 @@ test('inline save button stays inside the viewport when first shown', async () =
   vm.runInNewContext(source, context, { filename: sourcePath });
 
   const image = new MockImageElement();
-  document.dispatch('mousemove', { target: image });
+  document.dispatch('mousemove', { target: image, isTrusted: true });
 
   const [button] = document.body.children;
   assert.ok(button, 'expected content script to append a button to the page');
   assert.equal(button.style.display, 'block');
   assert.equal(button.style.left, '1171px');
   assert.equal(button.style.top, '128px');
+});
+
+test('synthetic hover and click events do not trigger inline saves', async () => {
+  const sourcePath = path.resolve('src/content.js');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const document = createDocument();
+  const sentMessages = [];
+  const window = {
+    innerWidth: 1280,
+    innerHeight: 720,
+    addEventListener() {},
+    setTimeout() {
+      return 1;
+    },
+    clearTimeout() {}
+  };
+
+  const context = {
+    chrome: {
+      runtime: {
+        async sendMessage(message) {
+          sentMessages.push(message);
+          return { ok: true };
+        }
+      }
+    },
+    console,
+    document,
+    Element: MockElement,
+    HTMLImageElement: MockImageElement,
+    location: { href: 'https://example.com/page' },
+    window
+  };
+
+  vm.runInNewContext(source, context, { filename: sourcePath });
+
+  const image = new MockImageElement();
+  document.dispatch('mousemove', { target: image, isTrusted: false });
+
+  const [button] = document.body.children;
+  assert.ok(button, 'expected button to mount');
+  assert.equal(button.style.display, 'none');
+
+  for (const listener of button.listeners.get('click') ?? []) {
+    await listener({ isTrusted: false });
+  }
+
+  assert.equal(sentMessages.length, 0);
+});
+
+test('content script mounts without body and falls back to documentElement', async () => {
+  const sourcePath = path.resolve('src/content.js');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const document = createDocument();
+  document.body = null;
+  const sentMessages = [];
+  const window = {
+    innerWidth: 1280,
+    innerHeight: 720,
+    addEventListener() {},
+    setTimeout() {
+      return 1;
+    },
+    clearTimeout() {}
+  };
+
+  const context = {
+    chrome: {
+      runtime: {
+        async sendMessage(message) {
+          sentMessages.push(message);
+          return { ok: true };
+        }
+      }
+    },
+    console,
+    document,
+    Element: MockElement,
+    HTMLImageElement: MockImageElement,
+    location: { href: 'https://example.com/page' },
+    window
+  };
+
+  vm.runInNewContext(source, context, { filename: sourcePath });
+
+  assert.equal(document.documentElement.children.length, 1);
+
+  const image = new MockImageElement();
+  document.dispatch('contextmenu', { target: image });
+
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].type, 'IMAGE_CONTEXT_UPDATED');
 });

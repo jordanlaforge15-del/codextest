@@ -33,6 +33,28 @@ saveButton.style.font = '600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto
 saveButton.style.cursor = 'pointer';
 saveButton.style.boxShadow = '0 3px 12px rgba(0, 0, 0, 0.2)';
 saveButton.style.display = 'none';
+function getButtonContainer() {
+    if (document.body) {
+        return document.body;
+    }
+    if (document.documentElement) {
+        return document.documentElement;
+    }
+    return null;
+}
+function mountSaveButton() {
+    const container = getButtonContainer();
+    if (container) {
+        container.append(saveButton);
+        return;
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        const readyContainer = getButtonContainer();
+        if (readyContainer) {
+            readyContainer.append(saveButton);
+        }
+    }, { once: true });
+}
 function setButtonState(state, errorMessage) {
     if (resetTimer !== null) {
         window.clearTimeout(resetTimer);
@@ -150,16 +172,25 @@ async function saveActiveImage() {
     }
     setButtonState('error', response.error);
 }
-document.body.append(saveButton);
-saveButton.addEventListener('click', () => {
+mountSaveButton();
+saveButton.addEventListener('click', (event) => {
+    if (!event.isTrusted) {
+        return;
+    }
     void saveActiveImage();
 });
-saveButton.addEventListener('mouseenter', () => {
+saveButton.addEventListener('mouseenter', (event) => {
+    if (!event.isTrusted) {
+        return;
+    }
     if (activeImage) {
         positionButton(activeImage);
     }
 });
 document.addEventListener('mousemove', (event) => {
+    if (!event.isTrusted) {
+        return;
+    }
     maybeShowButtonForTarget(event.target);
 }, true);
 document.addEventListener('contextmenu', (event) => {
