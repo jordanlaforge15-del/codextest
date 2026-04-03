@@ -96,6 +96,9 @@
       .panel-actions button {
         margin-top: 0;
       }
+      #delete-workspace {
+        background: #dc2626;
+      }
       .workspace-picker-row {
         display: flex;
         gap: 8px;
@@ -131,6 +134,16 @@
         margin-top: 0;
         font-weight: 400;
       }
+      .render-used-item {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 8px;
+        align-items: start;
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        padding: 8px;
+        background: #ffffff;
+      }
       .item-card input {
         width: auto;
         margin: 4px 0 0;
@@ -160,12 +173,26 @@
         margin: 0;
         font-weight: 600;
       }
+      .item-card-title {
+        display: inline-block;
+        color: #0f172a;
+        text-decoration: none;
+      }
+      .item-card-title:hover {
+        text-decoration: underline;
+      }
       .item-card-meta,
       .item-card-status,
       .render-card-meta,
       .render-card-error {
         margin: 4px 0 0;
         color: #475569;
+      }
+      .item-card-delete {
+        margin-top: 8px;
+        width: auto;
+        padding: 6px 10px;
+        background: #dc2626;
       }
       .item-card-status.is-ready {
         color: #166534;
@@ -180,6 +207,12 @@
         border: 1px solid #dbe4ee;
         border-radius: 8px;
         background: #ffffff;
+      }
+      .render-used-items {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
       }
       .render-card-header {
         display: flex;
@@ -290,6 +323,7 @@
       <p id="workspace-id-caption">Choose a workspace above to make it active.</p>
       <div class="panel-actions">
         <button id="refresh-workspace" type="button">Refresh workspace</button>
+        <button id="delete-workspace" type="button">Delete workspace</button>
       </div>
       <p id="workspace-items-summary">0 render-ready items out of 0</p>
       <div id="workspace-items"></div>

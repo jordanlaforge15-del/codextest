@@ -133,6 +133,29 @@ Render responses from:
 
 also include `currentVote`, so the web app can render vote state without an extra request per render.
 
+
+## Standalone web UI + auth (Task web-ui)
+
+The web app is now a standalone TypeScript server-rendered UI with these routes:
+
+- `/login`: login form
+- `/signup`: create account form
+- `/home`: workspace list + minimal create workspace form
+- `/workspaces/:workspaceId`: item selection + render request + renders grouped by vote (`up`, `neutral`, `down`, `unvoted`)
+
+Minimal API auth support was added:
+
+- `POST /auth/signup`
+- `POST /auth/login`
+- `GET /auth/me`
+
+Auth assumptions:
+
+- Local-first auth with email/password only.
+- Passwords are hashed with Node `scrypt` + random salt.
+- The API returns a signed token; the web app stores it in an HTTP-only cookie (`mvp_auth_token`).
+- Workspace/item/render endpoints remain unauthenticated in this MVP iteration for compatibility with existing flows.
+
 ## Repo layout
 
 ```text

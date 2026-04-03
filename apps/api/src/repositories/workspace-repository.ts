@@ -19,3 +19,7 @@ export async function updateWorkspaceById(
 ): Promise<Workspace> {
   return prisma.workspace.update({ where: { id }, data });
 }
+
+export async function deleteWorkspaceById(id: string): Promise<void> {
+  await prisma.workspace.delete({ where: { id } });
+}

@@ -33,6 +33,10 @@ async function fetchJson(path, options) {
   const response = await fetch(`${apiBaseUrl}${path}`, options);
   const body = await response.json().catch(() => ({}));
 
+  if (response.ok && response.status === 204) {
+    return undefined;
+  }
+
   if (!response.ok) {
     throw new Error(body.error?.message || `Request failed (${response.status})`);
   }
@@ -56,6 +60,10 @@ function renderWorkspaceMeta(workspace) {
   `;
 }
 
+function getItemOriginalUrl(item) {
+  return item.pageUrl || item.sourceUrl || null;
+}
+
 function renderItems(items) {
   if (!items.length) {
     renderEmptyState(itemsGrid, 'No items in this workspace yet.');
@@ -69,6 +77,7 @@ function renderItems(items) {
       const extraction = item.metadataJson?.extraction || {};
       const derived = extraction.derived || {};
       const priceLabel = item.price ? `${item.currency ? `${item.currency} ` : ''}${item.price}` : 'No price';
+      const originalUrl = getItemOriginalUrl(item);
       return `
         <article class="item-card">
           ${previewImage ? `<img src="${previewImage}" alt="${item.title || 'Workspace item'}" />` : ''}
@@ -76,7 +85,7 @@ function renderItems(items) {
             <label>
               <input type="checkbox" data-item-id="${item.id}" />
               <span>
-                <h3>${item.title || 'Untitled item'}</h3>
+                <h3>${originalUrl ? `<a href="${originalUrl}" target="_blank" rel="noreferrer">${item.title || 'Untitled item'}</a>` : item.title || 'Untitled item'}</h3>
                 <div class="chips">
                   <span class="chip">${item.role}</span>
                   <span class="chip">${item.slotType || 'unslotted'}</span>
@@ -118,6 +127,9 @@ function renderItems(items) {
               </label>
               <button class="save-item-button" type="button" data-action="save-item" data-item-id="${item.id}">
                 Save metadata
+              </button>
+              <button class="delete-item-button" type="button" data-action="delete-item" data-item-id="${item.id}">
+                Delete item
               </button>
             </div>
           </div>
@@ -302,6 +314,29 @@ async function updateItem(itemId) {
   }
 }
 
+async function deleteItem(itemId) {
+  if (!selectedWorkspaceId) {
+    setStatus('Select a workspace first.');
+    return;
+  }
+
+  setStatus(`Deleting ${itemId}...`);
+
+  try {
+    await fetchJson(
+      `/workspaces/${encodeURIComponent(selectedWorkspaceId)}/items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'DELETE'
+      }
+    );
+
+    setStatus(`Deleted ${itemId}.`);
+    await loadWorkspaceData();
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to delete item');
+  }
+}
+
 async function voteOnRender(renderId, vote) {
   if (!selectedWorkspaceId) {
     setStatus('Select a workspace first.');
@@ -350,11 +385,18 @@ itemsGrid.addEventListener('click', async (event) => {
 
   const action = target.dataset.action;
   const itemId = target.dataset.itemId;
-  if (action !== 'save-item' || !itemId) {
+  if (!itemId) {
     return;
   }
 
-  await updateItem(itemId);
+  if (action === 'save-item') {
+    await updateItem(itemId);
+    return;
+  }
+
+  if (action === 'delete-item') {
+    await deleteItem(itemId);
+  }
 });
 
 rendersList.addEventListener('click', async (event) => {

@@ -2,6 +2,7 @@ import type { Workspace } from '@mvp/shared';
 import { HttpError } from '../errors/http-error.js';
 import {
   createWorkspace,
+  deleteWorkspaceById,
   getWorkspaceById,
   listWorkspaces,
   updateWorkspaceById
@@ -66,4 +67,9 @@ export async function updateWorkspaceService(
   });
 
   return toWorkspaceResponse(workspace);
+}
+
+export async function deleteWorkspaceService(workspaceId: string): Promise<void> {
+  await getWorkspaceService(workspaceId);
+  await deleteWorkspaceById(workspaceId);
 }
