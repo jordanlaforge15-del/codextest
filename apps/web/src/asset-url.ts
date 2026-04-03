@@ -16,3 +16,14 @@ export function resolveAssetUrl(
 
   return `${normalizeBaseUrl(apiBaseUrl)}${relativeOrAbsolute}`;
 }
+
+import type { Render } from '@mvp/shared';
+
+export function getPreferredWorkspaceThumbnail(renders: Render[]): string | null {
+  const upVotedRender = renders.find((render) => render.currentVote === 'up' && render.outputImageUrl);
+  if (upVotedRender) {
+    return upVotedRender.outputImageUrl;
+  }
+
+  return null;
+}

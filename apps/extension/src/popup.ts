@@ -64,6 +64,7 @@ const workspaceIdCaptionElement = document.querySelector<HTMLElement>('#workspac
 const itemsSummaryElement = document.querySelector<HTMLElement>('#workspace-items-summary');
 const itemsElement = document.querySelector<HTMLDivElement>('#workspace-items');
 const refreshWorkspaceButtonElement = document.querySelector<HTMLButtonElement>('#refresh-workspace');
+const deleteWorkspaceButtonElement = document.querySelector<HTMLButtonElement>('#delete-workspace');
 const renderModeSelectElement = document.querySelector<HTMLSelectElement>('#render-mode');
 const submitRenderButtonElement = document.querySelector<HTMLButtonElement>('#submit-render');
 const refreshRendersButtonElement = document.querySelector<HTMLButtonElement>('#refresh-renders');
@@ -84,6 +85,7 @@ if (
   !itemsSummaryElement ||
   !itemsElement ||
   !refreshWorkspaceButtonElement ||
+  !deleteWorkspaceButtonElement ||
   !renderModeSelectElement ||
   !submitRenderButtonElement ||
   !refreshRendersButtonElement ||
@@ -106,6 +108,7 @@ const workspaceIdCaption = workspaceIdCaptionElement;
 const workspaceItemsSummary = itemsSummaryElement;
 const workspaceItems = itemsElement;
 const refreshWorkspaceButton = refreshWorkspaceButtonElement;
+const deleteWorkspaceButton = deleteWorkspaceButtonElement;
 const renderModeSelect = renderModeSelectElement;
 const submitRenderButton = submitRenderButtonElement;
 const refreshRendersButton = refreshRendersButtonElement;
@@ -178,6 +181,52 @@ function getReadyItems(items: Item[]): Item[] {
 
 function getSelectedReadyItems(): Item[] {
   return getReadyItems(state.items).filter((item) => state.selectedItemIds.has(item.id));
+}
+
+function getItemOriginalUrl(item: Item): string | null {
+  return item.pageUrl ?? item.sourceUrl ?? null;
+}
+
+function createItemSummaryRow(item: Item): HTMLDivElement {
+  const row = document.createElement('div');
+  row.className = 'render-used-item';
+
+  const preview = document.createElement('div');
+  preview.className = 'item-card-preview';
+
+  if (item.imageUrl) {
+    const image = document.createElement('img');
+    image.src = item.imageUrl;
+    image.alt = item.title ?? 'Workspace item image';
+    image.loading = 'lazy';
+    preview.append(image);
+  } else {
+    const imagePlaceholder = document.createElement('div');
+    imagePlaceholder.className = 'item-card-placeholder';
+    imagePlaceholder.textContent = 'No image';
+    preview.append(imagePlaceholder);
+  }
+
+  const details = document.createElement('div');
+  details.className = 'item-card-details';
+
+  const title = document.createElement(getItemOriginalUrl(item) ? 'a' : 'p');
+  title.className = 'item-card-title';
+  title.textContent = item.title ?? 'Untitled item';
+  if (title instanceof HTMLAnchorElement) {
+    title.href = getItemOriginalUrl(item) ?? '#';
+    title.target = '_blank';
+    title.rel = 'noreferrer';
+  }
+
+  const meta = document.createElement('p');
+  meta.className = 'item-card-meta';
+  meta.textContent = `role: ${item.role} · slot: ${item.slotType ?? 'none'}`;
+
+  details.append(title, meta);
+  row.append(preview, details);
+
+  return row;
 }
 
 function formatRenderTimestamp(value: string): string {
@@ -270,6 +319,7 @@ function setWorkspaceLoadingState(isLoading: boolean): void {
   const disabled = isLoading || !getWorkspaceId();
   refreshWorkspaceButton.disabled = disabled;
   refreshWorkspaceButton.textContent = isLoading ? 'Refreshing…' : 'Refresh workspace';
+  deleteWorkspaceButton.disabled = disabled;
 }
 
 function setRenderLoadingState(isLoading: boolean): void {
@@ -358,9 +408,14 @@ function renderWorkspaceItems(items: Item[]): void {
     const details = document.createElement('div');
     details.className = 'item-card-details';
 
-    const title = document.createElement('p');
+    const title = document.createElement(getItemOriginalUrl(item) ? 'a' : 'p');
     title.className = 'item-card-title';
     title.textContent = item.title ?? 'Untitled item';
+    if (title instanceof HTMLAnchorElement) {
+      title.href = getItemOriginalUrl(item) ?? '#';
+      title.target = '_blank';
+      title.rel = 'noreferrer';
+    }
 
     const meta = document.createElement('p');
     meta.className = 'item-card-meta';
@@ -370,7 +425,15 @@ function renderWorkspaceItems(items: Item[]): void {
     readiness.className = `item-card-status ${isReady ? 'is-ready' : 'is-blocked'}`;
     readiness.textContent = isReady ? 'Ready to render' : 'Missing stored image';
 
-    details.append(title, meta, readiness);
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'item-card-delete';
+    deleteButton.textContent = 'Delete';
+    deleteButton.addEventListener('click', async () => {
+      await deleteWorkspaceItem(item.id);
+    });
+
+    details.append(title, meta, readiness, deleteButton);
     card.append(checkbox, preview, details);
     workspaceItems.append(card);
   }
@@ -433,6 +496,29 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
       link.rel = 'noreferrer';
       link.textContent = 'Open render image';
       card.append(link);
+    }
+
+    const usedItemsHeading = document.createElement('p');
+    usedItemsHeading.className = 'render-card-meta';
+    usedItemsHeading.innerHTML = '<strong>Items in render</strong>';
+    card.append(usedItemsHeading);
+
+    const usedItems = render.selectedItemIds
+      .map((itemId) => state.items.find((item) => item.id === itemId))
+      .filter((item): item is Item => Boolean(item));
+
+    if (usedItems.length === 0) {
+      const emptyUsedItems = document.createElement('p');
+      emptyUsedItems.className = 'empty-state';
+      emptyUsedItems.textContent = 'No selected items found for this render.';
+      card.append(emptyUsedItems);
+    } else {
+      const usedItemsList = document.createElement('div');
+      usedItemsList.className = 'render-used-items';
+      for (const item of usedItems) {
+        usedItemsList.append(createItemSummaryRow(item));
+      }
+      card.append(usedItemsList);
     }
 
     const voteControls = document.createElement('div');
@@ -502,6 +588,35 @@ async function submitRenderVote(renderId: string, vote: RenderVoteValue): Promis
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Failed to save render vote.', true);
     return null;
+  }
+}
+
+async function deleteWorkspaceItem(itemId: string): Promise<void> {
+  const workspaceId = getWorkspaceId();
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (!workspaceId) {
+    setStatus('Set a workspace ID before deleting items.', true);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/items/${encodeURIComponent(itemId)}`,
+      {
+        method: 'DELETE'
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Unable to delete item (${response.status}).`);
+    }
+
+    state.selectedItemIds.delete(itemId);
+    setStatus(`Deleted item ${itemId}.`);
+    await refreshWorkspaceView();
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to delete item.', true);
   }
 }
 
@@ -737,6 +852,48 @@ async function createWorkspaceFromPopup(): Promise<void> {
   }
 }
 
+async function deleteActiveWorkspace(): Promise<void> {
+  const workspaceId = getWorkspaceId();
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (!workspaceId) {
+    setStatus('Choose an active workspace before deleting it.', true);
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}`,
+      {
+        method: 'DELETE'
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to delete workspace (${response.status}).`)
+      );
+    }
+
+    state.workspaces = state.workspaces.filter((workspace) => workspace.id !== workspaceId);
+    state.activeWorkspaceId = state.workspaces[0]?.id ?? '';
+    state.activeWorkspaceTitle = state.workspaces[0]?.title ?? '';
+    await persistSettings();
+    renderWorkspacePicker();
+    renderActiveWorkspaceSummary();
+
+    if (state.activeWorkspaceId) {
+      await refreshWorkspaceView();
+    } else {
+      resetWorkspaceView('No workspace selected', 'Create a workspace to get started.');
+    }
+
+    setStatus('Workspace deleted.');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to delete workspace.', true);
+  }
+}
+
 async function loadSettings(): Promise<void> {
   const settings = await readSettings();
 
@@ -787,6 +944,10 @@ createWorkspaceForm.addEventListener('submit', (event) => {
 
 refreshWorkspaceButton.addEventListener('click', () => {
   void refreshWorkspaceView();
+});
+
+deleteWorkspaceButton.addEventListener('click', () => {
+  void deleteActiveWorkspace();
 });
 
 refreshRendersButton.addEventListener('click', () => {

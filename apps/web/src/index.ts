@@ -3,7 +3,7 @@ import express, { type Express } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Item, Render, Workspace } from '@mvp/shared';
-import { normalizeBaseUrl, resolveAssetUrl } from './asset-url.js';
+import { getPreferredWorkspaceThumbnail, normalizeBaseUrl, resolveAssetUrl } from './asset-url.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,11 +44,15 @@ async function fetchApi<T>(pathName: string, init: RequestInit = {}, token?: str
   });
 
   const payload = (await response.json().catch(() => null)) as { error?: { message?: string }; data?: T } | null;
-  if (!response.ok || !payload) {
+  if (response.ok && response.status === 204) {
+    return undefined as T;
+  }
+
+  if (!response.ok) {
     throw new Error(payload?.error?.message || `Request failed (${response.status})`);
   }
 
-  return payload.data as T;
+  return (payload?.data as T) ?? (undefined as T);
 }
 
 function htmlPage(title: string, body: string): string {
@@ -118,6 +122,10 @@ function escapeHtml(value: string): string {
   });
 }
 
+function getItemOriginalUrl(item: Item): string | null {
+  return item.pageUrl ?? item.sourceUrl ?? null;
+}
+
 function parseSelectedItemIds(raw: unknown): string[] {
   if (typeof raw === 'string') {
     return [raw];
@@ -142,12 +150,44 @@ async function requireToken(req: express.Request, res: express.Response): Promis
 function groupRenders(renders: Render[]): Record<'up' | 'neutral' | 'down' | 'unvoted', Render[]> {
   return renders.reduce<Record<'up' | 'neutral' | 'down' | 'unvoted', Render[]>>(
     (groups, render) => {
+      if (render.status === 'failed') {
+        return groups;
+      }
+
       const key = render.currentVote ?? 'unvoted';
       groups[key].push(render);
       return groups;
     },
     { up: [], neutral: [], down: [], unvoted: [] }
   );
+}
+
+function renderItemSummaryContent(item: Item): string {
+  return `
+    <img src="${escapeHtml(item.imageUrl || '')}" alt="${escapeHtml(item.title || 'item')}" onerror="this.style.display='none'" />
+    <span>
+      ${
+        getItemOriginalUrl(item)
+          ? `<strong><a href="${escapeHtml(getItemOriginalUrl(item) ?? '')}" target="_blank" rel="noreferrer">${escapeHtml(item.title || 'Untitled item')}</a></strong>`
+          : `<strong>${escapeHtml(item.title || 'Untitled item')}</strong>`
+      }<br />
+      role: ${item.role} · slot: ${escapeHtml(item.slotType || 'none')}
+    </span>
+  `;
+}
+
+function renderSelectedItemsSummary(render: Render, items: Item[]): string {
+  const selectedItems = render.selectedItemIds
+    .map((itemId) => items.find((item) => item.id === itemId))
+    .filter((item): item is Item => Boolean(item));
+
+  if (selectedItems.length === 0) {
+    return '<p class="empty">No selected items found for this render.</p>';
+  }
+
+  return `<div class="stack">${selectedItems
+    .map((item) => `<div class="item-row render-item-row">${renderItemSummaryContent(item)}</div>`)
+    .join('')}</div>`;
 }
 
 function renderWorkspacePage(params: {
@@ -175,13 +215,6 @@ function renderWorkspacePage(params: {
         <section class="panel">
           <h2>Items</h2>
           <form method="post" action="/workspaces/${params.workspace.id}/renders" class="stack">
-            <label>
-              Render mode
-              <select name="renderMode">
-                <option value="preview">preview</option>
-                <option value="high_quality">high_quality</option>
-              </select>
-            </label>
             <p>Selected items are used to request a render.</p>
             <p><strong>Total items:</strong> ${params.items.length}</p>
             ${
@@ -190,18 +223,28 @@ function renderWorkspacePage(params: {
                 : `<div class="stack">${params.items
                     .map(
                       (item) => `
-                        <label class="item-row">
+                        <div class="item-row">
                           <input type="checkbox" name="selectedItemIds" value="${item.id}" />
-                          <img src="${escapeHtml(item.imageUrl || '')}" alt="${escapeHtml(item.title || 'item')}" onerror="this.style.display='none'" />
-                          <span>
-                            <strong>${escapeHtml(item.title || 'Untitled item')}</strong><br />
-                            role: ${item.role} · slot: ${escapeHtml(item.slotType || 'none')}
-                          </span>
-                        </label>
+                          ${renderItemSummaryContent(item)}
+                          <button
+                            type="submit"
+                            formaction="/workspaces/${params.workspace.id}/items/${item.id}/delete"
+                            formmethod="post"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       `
                     )
                     .join('')}</div>`
             }
+            <label>
+              Render mode
+              <select name="renderMode">
+                <option value="preview">preview</option>
+                <option value="high_quality">high_quality</option>
+              </select>
+            </label>
             <button type="submit" ${params.items.length === 0 ? 'disabled' : ''}>Request render</button>
           </form>
         </section>
@@ -227,9 +270,21 @@ function renderWorkspacePage(params: {
                                 }
                                 <div>
                                   <strong>${render.id}</strong><br />
-                                  status: ${render.status} · vote: ${render.currentVote || 'unvoted'}<br />
-                                  selected items: ${render.selectedItemIds.length}<br />
-                                  created: ${new Date(render.createdAt).toLocaleString()}
+                                  <p>status: ${render.status} · vote: ${render.currentVote || 'unvoted'}</p>
+                                  <p>created: ${new Date(render.createdAt).toLocaleString()}</p>
+                                  ${
+                                    voteType === 'unvoted'
+                                      ? `
+                                        <form method="post" action="/workspaces/${params.workspace.id}/renders/${render.id}/vote" class="render-vote-form">
+                                          <button type="submit" name="vote" value="up">Up</button>
+                                          <button type="submit" name="vote" value="neutral">Neutral</button>
+                                          <button type="submit" name="vote" value="down">Down</button>
+                                        </form>
+                                      `
+                                      : ''
+                                  }
+                                  <p><strong>Items in render</strong></p>
+                                  ${renderSelectedItemsSummary(render, params.items)}
                                 </div>
                               </article>
                             `
@@ -244,6 +299,42 @@ function renderWorkspacePage(params: {
       </section>
     `
   );
+}
+
+function renderWorkspaceList(params: {
+  workspaces: Workspace[];
+  rendersByWorkspaceId: Map<string, Render[]>;
+}): string {
+  if (params.workspaces.length === 0) {
+    return '<p class="empty">No workspaces yet.</p>';
+  }
+
+  return `<div class="workspace-list">${params.workspaces
+    .map((workspace) => {
+      const thumbnailUrl = resolveAssetUrl(
+        apiBaseUrl,
+        getPreferredWorkspaceThumbnail(params.rendersByWorkspaceId.get(workspace.id) ?? [])
+      );
+
+      return `
+        <article class="workspace-card">
+          <a class="workspace-card-link" href="/workspaces/${workspace.id}">
+            ${
+              thumbnailUrl
+                ? `<img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(workspace.title)} thumbnail" />`
+                : '<div class="workspace-card-placeholder" aria-hidden="true">No preview</div>'
+            }
+            <div>
+              <strong>${escapeHtml(workspace.title)}</strong>
+            </div>
+          </a>
+          <form method="post" action="/home/workspaces/${workspace.id}/delete">
+            <button type="submit">Delete</button>
+          </form>
+        </article>
+      `;
+    })
+    .join('')}</div>`;
 }
 
 const app: Express = express();
@@ -342,6 +433,15 @@ app.get('/home', async (req, res) => {
 
   try {
     const workspaces = await fetchApi<Workspace[]>('/workspaces', {}, token);
+    const rendersByWorkspaceId = new Map<string, Render[]>(
+      await Promise.all(
+        workspaces.map(async (workspace) => {
+          const renders = await fetchApi<Render[]>(`/workspaces/${workspace.id}/renders`, {}, token);
+          return [workspace.id, renders] as const;
+        })
+      )
+    );
+
     res.send(
       htmlPage(
         'Home',
@@ -350,6 +450,10 @@ app.get('/home', async (req, res) => {
             <h1>Workspaces</h1>
             <form method="post" action="/logout"><button type="submit">Log out</button></form>
           </header>
+          <section class="panel">
+            <h2>Existing workspaces</h2>
+            ${renderWorkspaceList({ workspaces, rendersByWorkspaceId })}
+          </section>
           <section class="panel stack">
             <h2>Create workspace</h2>
             <form method="post" action="/home/workspaces" class="stack">
@@ -357,19 +461,6 @@ app.get('/home', async (req, res) => {
               <label>Intention text (optional)<input name="intentionText" /></label>
               <button type="submit">Create workspace</button>
             </form>
-          </section>
-          <section class="panel">
-            <h2>Existing workspaces</h2>
-            ${
-              workspaces.length === 0
-                ? '<p class="empty">No workspaces yet.</p>'
-                : `<ul>${workspaces
-                    .map(
-                      (workspace) =>
-                        `<li><a href="/workspaces/${workspace.id}">${escapeHtml(workspace.title)}</a> · ${escapeHtml(workspace.domainType)}</li>`
-                    )
-                    .join('')}</ul>`
-            }
           </section>
         `
       )
@@ -400,6 +491,81 @@ app.post('/home/workspaces', async (req, res) => {
     res.redirect(`/workspaces/${workspace.id}`);
   } catch {
     res.redirect('/home');
+  }
+});
+
+app.post('/home/workspaces/:workspaceId/delete', async (req, res) => {
+  const token = await requireToken(req, res);
+  if (!token) return;
+
+  const workspaceId = req.params.workspaceId;
+
+  try {
+    await fetchApi(
+      `/workspaces/${workspaceId}`,
+      {
+        method: 'DELETE'
+      },
+      token
+    );
+
+    res.redirect('/home');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete workspace';
+    res.redirect(`/home?error=${encodeURIComponent(message)}`);
+  }
+});
+
+app.post('/workspaces/:workspaceId/items/:itemId/delete', async (req, res) => {
+  const token = await requireToken(req, res);
+  if (!token) return;
+
+  const workspaceId = req.params.workspaceId;
+  const itemId = req.params.itemId;
+
+  try {
+    await fetchApi(
+      `/workspaces/${workspaceId}/items/${itemId}`,
+      {
+        method: 'DELETE'
+      },
+      token
+    );
+
+    res.redirect(`/workspaces/${workspaceId}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete item';
+    res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent(message)}`);
+  }
+});
+
+app.post('/workspaces/:workspaceId/renders/:renderId/vote', async (req, res) => {
+  const token = await requireToken(req, res);
+  if (!token) return;
+
+  const workspaceId = req.params.workspaceId;
+  const renderId = req.params.renderId;
+  const vote = String(req.body.vote ?? '');
+
+  if (!['up', 'neutral', 'down'].includes(vote)) {
+    res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent('Invalid render vote')}`);
+    return;
+  }
+
+  try {
+    await fetchApi(
+      `/workspaces/${workspaceId}/renders/${renderId}/vote`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ vote })
+      },
+      token
+    );
+
+    res.redirect(`/workspaces/${workspaceId}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save render vote';
+    res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent(message)}`);
   }
 });
 

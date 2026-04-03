@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import {
   createWorkspaceService,
+  deleteWorkspaceService,
   getWorkspaceService,
   listWorkspacesService,
   updateWorkspaceService
@@ -48,6 +49,16 @@ workspaceRouter.patch('/workspaces/:workspaceId', async (req, res, next) => {
     const payload = updateWorkspaceSchema.parse(req.body);
     const workspace = await updateWorkspaceService(workspaceId, payload);
     res.status(200).json({ data: workspace });
+  } catch (error) {
+    next(error);
+  }
+});
+
+workspaceRouter.delete('/workspaces/:workspaceId', async (req, res, next) => {
+  try {
+    const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+    await deleteWorkspaceService(workspaceId);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
