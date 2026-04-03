@@ -3,12 +3,13 @@ import express, { type Express } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Item, Render, Workspace } from '@mvp/shared';
+import { normalizeBaseUrl, resolveAssetUrl } from './asset-url.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, '../public');
 const port = Number(process.env.PORT ?? 3000);
-const apiBaseUrl = process.env.API_BASE_URL?.trim() || 'http://localhost:4000';
+const apiBaseUrl = normalizeBaseUrl(process.env.API_BASE_URL?.trim() || 'http://localhost:4000');
 const authCookieName = 'mvp_auth_token';
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -220,8 +221,8 @@ function renderWorkspacePage(params: {
                             (render) => `
                               <article class="render-row">
                                 ${
-                                  render.outputImageUrl
-                                    ? `<img src="${escapeHtml(render.outputImageUrl)}" alt="render ${render.id}" />`
+                                  resolveAssetUrl(apiBaseUrl, render.outputImageUrl)
+                                    ? `<img src="${escapeHtml(resolveAssetUrl(apiBaseUrl, render.outputImageUrl) ?? '')}" alt="render ${render.id}" />`
                                     : ''
                                 }
                                 <div>
