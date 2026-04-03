@@ -71,12 +71,22 @@ export async function generateRenderPreview(params: {
     );
   }
 
+  const prompt = `${buildRenderPrompt(params.workspace, params.items)}\nRequested quality mode: ${params.renderMode}.`;
+
+  console.log('[render-worker] sending prompt to OpenAI', {
+    workspaceId: params.workspace.id,
+    workspaceTitle: params.workspace.title,
+    renderMode: params.renderMode,
+    itemIds: params.items.map((item) => item.id),
+    prompt
+  });
+
   const response = await getOpenAIClient().images.edit({
     model: getOpenAIImageModel(),
     image: uploadImages,
-    prompt: `${buildRenderPrompt(params.workspace, params.items)}\nRequested quality mode: ${params.renderMode}.`,
+    prompt,
     input_fidelity: 'high',
-    size: '1024x1024',
+    size: '1024x1536',
     quality: getRenderQuality(params.renderMode),
     output_format: 'png'
   });
@@ -86,6 +96,11 @@ export async function generateRenderPreview(params: {
   if (!imageOutput?.b64_json) {
     throw new Error('OpenAI image edit response did not include generated image data');
   }
+
+  console.log('[render-worker] OpenAI revised prompt', {
+    workspaceId: params.workspace.id,
+    revisedPrompt: imageOutput.revised_prompt ?? null
+  });
 
   return {
     imageBase64: imageOutput.b64_json,

@@ -146,6 +146,7 @@ async function loadRenderJob(renderId: string): Promise<LoadedRenderJob> {
       title: render.workspace.title,
       intentionText: render.workspace.intentionText,
       domainType: render.workspace.domainType as Workspace['domainType'],
+      selectedItemIds,
       createdAt: render.workspace.createdAt.toISOString(),
       updatedAt: render.workspace.updatedAt.toISOString()
     },
