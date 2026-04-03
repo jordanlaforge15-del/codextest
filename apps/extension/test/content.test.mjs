@@ -239,3 +239,49 @@ test('content script mounts without body and falls back to documentElement', asy
   assert.equal(sentMessages.length, 1);
   assert.equal(sentMessages[0].type, 'IMAGE_CONTEXT_UPDATED');
 });
+
+test('inline save button is disabled on app pages while context menu updates still work', async () => {
+  const sourcePath = path.resolve('src/content.js');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const document = createDocument();
+  const sentMessages = [];
+  const window = {
+    innerWidth: 1280,
+    innerHeight: 720,
+    addEventListener() {},
+    setTimeout() {
+      return 1;
+    },
+    clearTimeout() {}
+  };
+
+  const context = {
+    URL,
+    chrome: {
+      runtime: {
+        async sendMessage(message) {
+          sentMessages.push(message);
+          return { ok: true };
+        }
+      }
+    },
+    console,
+    document,
+    Element: MockElement,
+    HTMLImageElement: MockImageElement,
+    location: { href: 'http://localhost:3000/workspaces/test-workspace' },
+    window
+  };
+
+  vm.runInNewContext(source, context, { filename: sourcePath });
+
+  assert.equal(document.body.children.length, 0);
+
+  const image = new MockImageElement();
+  document.dispatch('mousemove', { target: image, isTrusted: true });
+  assert.equal(document.body.children.length, 0);
+
+  document.dispatch('contextmenu', { target: image });
+  assert.equal(sentMessages.length, 1);
+  assert.equal(sentMessages[0].type, 'IMAGE_CONTEXT_UPDATED');
+});

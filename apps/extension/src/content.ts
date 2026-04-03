@@ -24,6 +24,7 @@ const BUTTON_ERROR_TEXT = 'Failed ✕';
 const BUTTON_MARGIN = 8;
 const FALLBACK_BUTTON_WIDTH = 96;
 const FALLBACK_BUTTON_HEIGHT = 32;
+const APP_PAGE_PATH_PREFIXES = ['/home', '/login', '/signup', '/workspaces'];
 
 let activeImage: HTMLImageElement | null = null;
 let resetTimer: number | null = null;
@@ -43,6 +44,21 @@ saveButton.style.font = '600 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto
 saveButton.style.cursor = 'pointer';
 saveButton.style.boxShadow = '0 3px 12px rgba(0, 0, 0, 0.2)';
 saveButton.style.display = 'none';
+
+function isAppPage(urlString: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  if (!['localhost:3000', '127.0.0.1:3000'].includes(url.host)) {
+    return false;
+  }
+
+  return url.pathname === '/' || APP_PAGE_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
+}
 
 function getButtonContainer(): ParentNode | null {
   if (document.body) {
@@ -213,37 +229,75 @@ async function saveActiveImage(): Promise<void> {
   setButtonState('error', response.error);
 }
 
-mountSaveButton();
+if (!isAppPage(location.href)) {
+  mountSaveButton();
 
-saveButton.addEventListener('click', (event) => {
-  if (!event.isTrusted) {
-    return;
-  }
-
-  void saveActiveImage();
-});
-
-saveButton.addEventListener('mouseenter', (event) => {
-  if (!event.isTrusted) {
-    return;
-  }
-
-  if (activeImage) {
-    positionButton(activeImage);
-  }
-});
-
-document.addEventListener(
-  'mousemove',
-  (event) => {
+  saveButton.addEventListener('click', (event) => {
     if (!event.isTrusted) {
       return;
     }
 
-    maybeShowButtonForTarget(event.target);
-  },
-  true
-);
+    void saveActiveImage();
+  });
+
+  saveButton.addEventListener('mouseenter', (event) => {
+    if (!event.isTrusted) {
+      return;
+    }
+
+    if (activeImage) {
+      positionButton(activeImage);
+    }
+  });
+
+  document.addEventListener(
+    'mousemove',
+    (event) => {
+      if (!event.isTrusted) {
+        return;
+      }
+
+      maybeShowButtonForTarget(event.target);
+    },
+    true
+  );
+
+  document.addEventListener(
+    'mouseout',
+    (event) => {
+      if (!activeImage || !(event.target instanceof Element)) {
+        return;
+      }
+
+      if (!event.target.closest('img') && event.target !== saveButton) {
+        return;
+      }
+
+      const relatedTarget = event.relatedTarget;
+      if (
+        relatedTarget instanceof Element &&
+        (relatedTarget.closest('img') === activeImage || relatedTarget === saveButton || saveButton.contains(relatedTarget))
+      ) {
+        return;
+      }
+
+      hideButton();
+    },
+    true
+  );
+
+  window.addEventListener('scroll', () => {
+    if (activeImage) {
+      positionButton(activeImage);
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (activeImage) {
+      positionButton(activeImage);
+    }
+  });
+}
 
 document.addEventListener(
   'contextmenu',
@@ -264,39 +318,3 @@ document.addEventListener(
   },
   true
 );
-
-document.addEventListener(
-  'mouseout',
-  (event) => {
-    if (!activeImage || !(event.target instanceof Element)) {
-      return;
-    }
-
-    if (!event.target.closest('img') && event.target !== saveButton) {
-      return;
-    }
-
-    const relatedTarget = event.relatedTarget;
-    if (
-      relatedTarget instanceof Element &&
-      (relatedTarget.closest('img') === activeImage || relatedTarget === saveButton || saveButton.contains(relatedTarget))
-    ) {
-      return;
-    }
-
-    hideButton();
-  },
-  true
-);
-
-window.addEventListener('scroll', () => {
-  if (activeImage) {
-    positionButton(activeImage);
-  }
-});
-
-window.addEventListener('resize', () => {
-  if (activeImage) {
-    positionButton(activeImage);
-  }
-});
