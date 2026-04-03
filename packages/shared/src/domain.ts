@@ -5,6 +5,7 @@ export interface Workspace {
   title: string;
   intentionText: string | null;
   domainType: DomainType;
+  selectedItemIds: string[];
   createdAt: string;
   updatedAt: string;
 }

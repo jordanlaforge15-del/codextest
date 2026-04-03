@@ -4,10 +4,12 @@ import {
   deleteWorkspaceService,
   getWorkspaceService,
   listWorkspacesService,
+  updateWorkspaceSelectedItemsService,
   updateWorkspaceService
 } from '../services/workspace-service.js';
 import {
   createWorkspaceSchema,
+  updateWorkspaceSelectedItemsSchema,
   updateWorkspaceSchema,
   workspaceIdParamSchema
 } from '../schemas/workspace-schemas.js';
@@ -48,6 +50,17 @@ workspaceRouter.patch('/workspaces/:workspaceId', async (req, res, next) => {
     const { workspaceId } = workspaceIdParamSchema.parse(req.params);
     const payload = updateWorkspaceSchema.parse(req.body);
     const workspace = await updateWorkspaceService(workspaceId, payload);
+    res.status(200).json({ data: workspace });
+  } catch (error) {
+    next(error);
+  }
+});
+
+workspaceRouter.patch('/workspaces/:workspaceId/selected-items', async (req, res, next) => {
+  try {
+    const { workspaceId } = workspaceIdParamSchema.parse(req.params);
+    const payload = updateWorkspaceSelectedItemsSchema.parse(req.body);
+    const workspace = await updateWorkspaceSelectedItemsService(workspaceId, payload);
     res.status(200).json({ data: workspace });
   } catch (error) {
     next(error);

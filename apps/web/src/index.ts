@@ -223,7 +223,7 @@ function renderWorkspacePage(params: {
       <section class="grid-two">
         <section class="panel">
           <h2>Items</h2>
-          <form method="post" action="/workspaces/${params.workspace.id}/renders" class="stack">
+          <form method="post" action="/workspaces/${params.workspace.id}/renders" class="stack" data-workspace-form data-workspace-id="${params.workspace.id}">
             <p>Selected items are used to request a render.</p>
             <p><strong>Total items:</strong> ${params.items.length}</p>
             ${
@@ -233,7 +233,7 @@ function renderWorkspacePage(params: {
                     .map(
                       (item) => `
                         <div class="item-row">
-                          <input type="checkbox" name="selectedItemIds" value="${item.id}" />
+                          <input type="checkbox" name="selectedItemIds" value="${item.id}" data-selected-item-checkbox ${params.workspace.selectedItemIds.includes(item.id) ? 'checked' : ''} />
                           ${renderItemSummaryContent(item)}
                           <button
                             type="submit"
@@ -306,6 +306,7 @@ function renderWorkspacePage(params: {
             .join('')}
         </section>
       </section>
+      <script src="/workspace-selection.js"></script>
     `
   );
 }
@@ -348,6 +349,7 @@ function renderWorkspaceList(params: {
 
 export function createApp(): Express {
   const app: Express = express();
+  app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
   app.use(express.static(publicDir, { index: false }));
 
@@ -616,6 +618,34 @@ export function createApp(): Express {
   }
   });
 
+  app.post('/workspaces/:workspaceId/selected-items', async (req, res) => {
+  const token = await requireToken(req, res);
+  if (!token) return;
+
+  const workspaceId = req.params.workspaceId;
+  const selectedItemIds = Array.isArray(req.body.selectedItemIds)
+    ? req.body.selectedItemIds.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
+    : [];
+
+  try {
+    const workspace = await fetchApi<Workspace>(
+      `/workspaces/${workspaceId}/selected-items`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          selectedItemIds
+        })
+      },
+      token
+    );
+
+    res.status(200).json({ data: workspace });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save selected items';
+    res.status(400).json({ error: { message } });
+  }
+  });
+
   app.post('/workspaces/:workspaceId/renders', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
@@ -629,6 +659,17 @@ export function createApp(): Express {
   }
 
   try {
+    await fetchApi(
+      `/workspaces/${workspaceId}/selected-items`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          selectedItemIds
+        })
+      },
+      token
+    );
+
     await fetchApi(
       `/workspaces/${workspaceId}/renders`,
       {

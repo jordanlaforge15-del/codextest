@@ -11,3 +11,7 @@ export const createWorkspaceSchema = z.object({
 });
 
 export const updateWorkspaceSchema = createWorkspaceSchema.partial();
+
+export const updateWorkspaceSelectedItemsSchema = z.object({
+  selectedItemIds: z.array(z.string().min(1)).max(500)
+});
