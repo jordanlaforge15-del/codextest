@@ -36,6 +36,26 @@ This repository is a TypeScript + Node.js monorepo for a modular-monolith MVP wi
 > The Codex container image installs `@openai/codex` during build so Codex is available inside the container.
 > Use `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/workspace_mvp` from inside the Codex container.
 
+## Browser extension workspace flow
+
+The extension popup no longer requires manual workspace IDs.
+
+- The popup loads workspaces from `GET /workspaces` using the configured API base URL.
+- Users can pick an active workspace from the dropdown, and the selection is persisted in `chrome.storage.local`.
+- Users can create a workspace directly in the popup with a title-only form. The extension currently creates these as `domainType: "outfit"`.
+- A newly created workspace becomes the active workspace immediately and is then used for future capture saves.
+- If no active workspace is selected, the popup shows that state clearly and the background save flow warns the user instead of silently targeting a missing ID.
+
+Manual verification flow:
+
+1. Start the stack with `pnpm dev` and build the extension with `pnpm --filter @apps/extension build`.
+2. Load `apps/extension` as an unpacked Chromium extension.
+3. Open the popup and confirm the workspace picker loads entries from the API.
+4. Click a workspace in the picker and confirm the "Current workspace" panel updates immediately.
+5. Close and reopen the popup to confirm the active workspace is restored from `chrome.storage.local`.
+6. Create a new workspace from the popup and confirm it appears in the picker and becomes active automatically.
+7. Right-click an image on a local fixture page, save it to the workspace, and confirm the item appears under the active workspace without typing an ID.
+
 ## Local image and render storage
 
 The API now ingests `imageUrl` values during item creation and capture creation, and the worker stores AI-generated render outputs on the local filesystem.

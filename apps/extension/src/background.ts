@@ -1,5 +1,6 @@
 interface StoredSettings {
   workspaceId?: string;
+  workspaceTitle?: string;
   apiBaseUrl?: string;
 }
 
@@ -29,6 +30,8 @@ const CONTEXT_MENU_ID = 'save-image-to-workspace';
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
 const LOG_PREFIX = '[workspace-capture]';
+const NOTIFICATION_ICON_URL =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTI4IDEyOCI+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIHJ4PSIyNCIgZmlsbD0iIzI1NjNlYiIvPjxwYXRoIGQ9Ik0zNiA0NmMwLTYuNjI3IDUuMzczLTEyIDEyLTEyaDMyYzYuNjI3IDAgMTIgNS4zNzMgMTIgMTJ2MzZjMCA2LjYyNy01LjM3MyAxMi0xMiAxMkg0OGMtNi42MjcgMC0xMi01LjM3My0xMi0xMlY0NlpNNjQgNThjLTYuNjI3IDAtMTIgNS4zNzMtMTIgMTJoMjRjMC02LjYyNy01LjM3My0xMi0xMi0xMloiIGZpbGw9IiNmZmYiLz48L3N2Zz4=';
 
 const tabImageContext = new Map<number, ImageContextMessage['payload']>();
 
@@ -49,7 +52,20 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-async function getSettings(): Promise<Required<StoredSettings>> {
+function notifyUser(message: string): void {
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: NOTIFICATION_ICON_URL,
+    title: 'Workspace Capture',
+    message
+  });
+}
+
+async function getSettings(): Promise<{
+  workspaceId: string;
+  workspaceTitle: string;
+  apiBaseUrl: string;
+}> {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
   const raw = (result[SETTINGS_KEY] ?? {}) as StoredSettings;
 
@@ -57,6 +73,7 @@ async function getSettings(): Promise<Required<StoredSettings>> {
 
   return {
     workspaceId: raw.workspaceId?.trim() ?? '',
+    workspaceTitle: raw.workspaceTitle?.trim() ?? '',
     apiBaseUrl: raw.apiBaseUrl?.trim() || DEFAULT_API_BASE_URL
   };
 }
@@ -67,6 +84,7 @@ async function saveCapture(info: ContextMenuInfo, tab?: BrowserTab): Promise<voi
 
   if (!workspaceId) {
     log('Aborting save because workspaceId is missing');
+    notifyUser('Choose an active workspace in the extension popup before saving images.');
     return;
   }
 
@@ -163,6 +181,7 @@ chrome.contextMenus.onClicked.addListener((info: ContextMenuInfo, tab: BrowserTa
 
   saveCapture(info, tab).catch((error) => {
     log('saveCapture failed', getErrorMessage(error));
+    notifyUser(`Could not save image: ${getErrorMessage(error)}`);
   });
 });
 

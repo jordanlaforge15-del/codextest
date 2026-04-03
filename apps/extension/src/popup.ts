@@ -1,8 +1,13 @@
 import type { Item, Render, RenderMode, RenderVote, RenderVoteValue, Workspace } from '@mvp/shared';
 
 interface CaptureSettings {
-  workspaceId: string;
-  apiBaseUrl: string;
+  workspaceId?: string;
+  workspaceTitle?: string;
+  apiBaseUrl?: string;
+}
+
+interface WorkspaceListResponse {
+  data: Workspace[];
 }
 
 interface WorkspaceResponse {
@@ -25,20 +30,37 @@ interface RenderVoteResponse {
   data: RenderVote | null;
 }
 
+interface ApiErrorResponse {
+  error?: {
+    message?: string;
+  };
+}
+
 interface PopupState {
+  workspaces: Workspace[];
   items: Item[];
   renders: Render[];
   selectedItemIds: Set<string>;
+  activeWorkspaceId: string;
+  activeWorkspaceTitle: string;
 }
 
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
+const DEFAULT_WORKSPACE_DOMAIN_TYPE = 'outfit';
 
-const formElement = document.querySelector<HTMLFormElement>('#settings-form');
-const workspaceInputElement = document.querySelector<HTMLInputElement>('#workspace-id');
+const settingsFormElement = document.querySelector<HTMLFormElement>('#settings-form');
 const apiBaseUrlInputElement = document.querySelector<HTMLInputElement>('#api-base-url');
+const workspacePickerElement = document.querySelector<HTMLSelectElement>('#workspace-picker');
+const refreshWorkspaceListButtonElement =
+  document.querySelector<HTMLButtonElement>('#refresh-workspace-list');
+const createWorkspaceFormElement = document.querySelector<HTMLFormElement>('#create-workspace-form');
+const newWorkspaceTitleElement = document.querySelector<HTMLInputElement>('#new-workspace-title');
+const createWorkspaceButtonElement =
+  document.querySelector<HTMLButtonElement>('#create-workspace-button');
 const statusElementValue = document.querySelector<HTMLParagraphElement>('#status');
 const workspaceNameElement = document.querySelector<HTMLElement>('#workspace-name');
+const workspaceIdCaptionElement = document.querySelector<HTMLElement>('#workspace-id-caption');
 const itemsSummaryElement = document.querySelector<HTMLElement>('#workspace-items-summary');
 const itemsElement = document.querySelector<HTMLDivElement>('#workspace-items');
 const refreshWorkspaceButtonElement = document.querySelector<HTMLButtonElement>('#refresh-workspace');
@@ -49,11 +71,16 @@ const rendersSummaryElement = document.querySelector<HTMLElement>('#workspace-re
 const rendersElement = document.querySelector<HTMLDivElement>('#workspace-renders');
 
 if (
-  !formElement ||
-  !workspaceInputElement ||
+  !settingsFormElement ||
   !apiBaseUrlInputElement ||
+  !workspacePickerElement ||
+  !refreshWorkspaceListButtonElement ||
+  !createWorkspaceFormElement ||
+  !newWorkspaceTitleElement ||
+  !createWorkspaceButtonElement ||
   !statusElementValue ||
   !workspaceNameElement ||
+  !workspaceIdCaptionElement ||
   !itemsSummaryElement ||
   !itemsElement ||
   !refreshWorkspaceButtonElement ||
@@ -66,11 +93,16 @@ if (
   throw new Error('Popup UI is missing required elements.');
 }
 
-const form = formElement;
-const workspaceInput = workspaceInputElement;
+const settingsForm = settingsFormElement;
 const apiBaseUrlInput = apiBaseUrlInputElement;
+const workspacePicker = workspacePickerElement;
+const refreshWorkspaceListButton = refreshWorkspaceListButtonElement;
+const createWorkspaceForm = createWorkspaceFormElement;
+const newWorkspaceTitleInput = newWorkspaceTitleElement;
+const createWorkspaceButton = createWorkspaceButtonElement;
 const statusElement = statusElementValue;
 const workspaceName = workspaceNameElement;
+const workspaceIdCaption = workspaceIdCaptionElement;
 const workspaceItemsSummary = itemsSummaryElement;
 const workspaceItems = itemsElement;
 const refreshWorkspaceButton = refreshWorkspaceButtonElement;
@@ -81,9 +113,12 @@ const workspaceRendersSummary = rendersSummaryElement;
 const workspaceRenders = rendersElement;
 
 const state: PopupState = {
+  workspaces: [],
   items: [],
   renders: [],
-  selectedItemIds: new Set<string>()
+  selectedItemIds: new Set<string>(),
+  activeWorkspaceId: '',
+  activeWorkspaceTitle: ''
 };
 
 function setStatus(message: string, isError = false): void {
@@ -96,7 +131,45 @@ function getApiBaseUrl(): string {
 }
 
 function getWorkspaceId(): string {
-  return workspaceInput.value.trim();
+  return state.activeWorkspaceId;
+}
+
+function getActiveWorkspace(): Workspace | null {
+  return state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
+}
+
+function buildStoredSettings(): CaptureSettings {
+  const activeWorkspace = getActiveWorkspace();
+
+  return {
+    apiBaseUrl: getApiBaseUrl(),
+    workspaceId: state.activeWorkspaceId || undefined,
+    workspaceTitle: activeWorkspace?.title ?? state.activeWorkspaceTitle ?? undefined
+  };
+}
+
+async function persistSettings(): Promise<void> {
+  await chrome.storage.local.set({
+    [SETTINGS_KEY]: buildStoredSettings()
+  });
+}
+
+async function readSettings(): Promise<CaptureSettings> {
+  const result = await chrome.storage.local.get(SETTINGS_KEY);
+  return (result[SETTINGS_KEY] ?? {}) as CaptureSettings;
+}
+
+async function getResponseErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await response.json()) as ApiErrorResponse;
+    if (body.error?.message) {
+      return body.error.message;
+    }
+  } catch {
+    // Ignore JSON parse failures.
+  }
+
+  return fallback;
 }
 
 function getReadyItems(items: Item[]): Item[] {
@@ -127,18 +200,81 @@ function getRenderImageUrl(apiBaseUrl: string, render: Render): string | null {
   return `${apiBaseUrl.replace(/\/$/, '')}${render.outputImageUrl}`;
 }
 
+function formatWorkspaceOption(workspace: Workspace): string {
+  return `${workspace.title} · ${workspace.id.slice(0, 8)}`;
+}
+
+function renderWorkspacePicker(): void {
+  workspacePicker.innerHTML = '';
+
+  if (!state.workspaces.length) {
+    workspacePicker.innerHTML = '<option value="">No workspaces available</option>';
+    workspacePicker.value = '';
+    workspacePicker.disabled = true;
+    return;
+  }
+
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = 'Choose a workspace';
+  workspacePicker.append(placeholderOption);
+
+  for (const workspace of state.workspaces) {
+    const option = document.createElement('option');
+    option.value = workspace.id;
+    option.textContent = formatWorkspaceOption(workspace);
+    workspacePicker.append(option);
+  }
+
+  workspacePicker.disabled = false;
+  workspacePicker.value = state.activeWorkspaceId || '';
+}
+
+function renderActiveWorkspaceSummary(): void {
+  const activeWorkspace = getActiveWorkspace();
+
+  if (activeWorkspace) {
+    workspaceName.textContent = activeWorkspace.title;
+    workspaceIdCaption.textContent = activeWorkspace.id;
+    return;
+  }
+
+  if (state.activeWorkspaceId && state.activeWorkspaceTitle) {
+    workspaceName.textContent = state.activeWorkspaceTitle;
+    workspaceIdCaption.textContent = `${state.activeWorkspaceId} (refreshing list…)`;
+    return;
+  }
+
+  if (!state.workspaces.length) {
+    workspaceName.textContent = 'No workspace selected';
+    workspaceIdCaption.textContent = 'Create a workspace to start saving images.';
+    return;
+  }
+
+  workspaceName.textContent = 'No workspace selected';
+  workspaceIdCaption.textContent = 'Choose a workspace above to make it active.';
+}
+
 function updateSubmitButtonState(): void {
   const selectedReadyItems = getSelectedReadyItems();
-  submitRenderButton.disabled = selectedReadyItems.length < 2;
+  submitRenderButton.disabled = !getWorkspaceId() || selectedReadyItems.length < 2;
+}
+
+function setWorkspaceListLoadingState(isLoading: boolean): void {
+  refreshWorkspaceListButton.disabled = isLoading;
+  refreshWorkspaceListButton.textContent = isLoading ? 'Refreshing…' : 'Refresh list';
+  workspacePicker.disabled = isLoading || !state.workspaces.length;
 }
 
 function setWorkspaceLoadingState(isLoading: boolean): void {
-  refreshWorkspaceButton.disabled = isLoading;
+  const disabled = isLoading || !getWorkspaceId();
+  refreshWorkspaceButton.disabled = disabled;
   refreshWorkspaceButton.textContent = isLoading ? 'Refreshing…' : 'Refresh workspace';
 }
 
 function setRenderLoadingState(isLoading: boolean): void {
-  refreshRendersButton.disabled = isLoading;
+  const disabled = isLoading || !getWorkspaceId();
+  refreshRendersButton.disabled = disabled;
   refreshRendersButton.textContent = isLoading ? 'Refreshing…' : 'Refresh renders';
 }
 
@@ -151,6 +287,11 @@ function setRenderSubmitState(isSubmitting: boolean): void {
 
   submitRenderButton.textContent = 'Create render';
   updateSubmitButtonState();
+}
+
+function setCreateWorkspaceState(isSubmitting: boolean): void {
+  createWorkspaceButton.disabled = isSubmitting;
+  createWorkspaceButton.textContent = isSubmitting ? 'Creating…' : 'Create workspace';
 }
 
 function toggleItemSelection(itemId: string, isSelected: boolean): void {
@@ -175,7 +316,7 @@ function renderWorkspaceItems(items: Item[]): void {
 
   workspaceItemsSummary.textContent = `${getReadyItems(items).length} render-ready item${getReadyItems(items).length === 1 ? '' : 's'} out of ${items.length}`;
 
-  if (items.length === 0) {
+  if (!items.length) {
     const emptyMessage = document.createElement('p');
     emptyMessage.className = 'empty-state';
     emptyMessage.textContent = 'No items found for this workspace yet.';
@@ -241,7 +382,7 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
   workspaceRenders.innerHTML = '';
   workspaceRendersSummary.textContent = `${renders.length} render${renders.length === 1 ? '' : 's'} in this workspace`;
 
-  if (renders.length === 0) {
+  if (!renders.length) {
     const emptyMessage = document.createElement('p');
     emptyMessage.className = 'empty-state';
     emptyMessage.textContent = 'No renders yet.';
@@ -327,7 +468,7 @@ async function submitRenderVote(renderId: string, vote: RenderVoteValue): Promis
   const apiBaseUrl = getApiBaseUrl();
 
   if (!workspaceId) {
-    setStatus('Set a workspace ID before rating renders.', true);
+    setStatus('Choose an active workspace before rating renders.', true);
     return null;
   }
 
@@ -344,17 +485,9 @@ async function submitRenderVote(renderId: string, vote: RenderVoteValue): Promis
     );
 
     if (!response.ok) {
-      let errorMessage = `Unable to save render vote (${response.status}).`;
-      try {
-        const body = (await response.json()) as { error?: { message?: string } };
-        if (body.error?.message) {
-          errorMessage = body.error.message;
-        }
-      } catch {
-        // Ignore JSON parse failures.
-      }
-
-      throw new Error(errorMessage);
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to save render vote (${response.status}).`)
+      );
     }
 
     const payload = (await response.json()) as RenderVoteResponse;
@@ -385,15 +518,21 @@ async function fetchWorkspaceData(workspaceId: string, apiBaseUrl: string): Prom
   ]);
 
   if (!workspaceResponse.ok) {
-    throw new Error(`Unable to load workspace (${workspaceResponse.status}).`);
+    throw new Error(
+      await getResponseErrorMessage(workspaceResponse, `Unable to load workspace (${workspaceResponse.status}).`)
+    );
   }
 
   if (!itemsResponse.ok) {
-    throw new Error(`Unable to load workspace items (${itemsResponse.status}).`);
+    throw new Error(
+      await getResponseErrorMessage(itemsResponse, `Unable to load workspace items (${itemsResponse.status}).`)
+    );
   }
 
   if (!rendersResponse.ok) {
-    throw new Error(`Unable to load renders (${rendersResponse.status}).`);
+    throw new Error(
+      await getResponseErrorMessage(rendersResponse, `Unable to load renders (${rendersResponse.status}).`)
+    );
   }
 
   const workspacePayload = (await workspaceResponse.json()) as WorkspaceResponse;
@@ -404,12 +543,14 @@ async function fetchWorkspaceData(workspaceId: string, apiBaseUrl: string): Prom
   state.renders = rendersPayload.data;
 
   workspaceName.textContent = workspacePayload.data.title;
+  workspaceIdCaption.textContent = workspacePayload.data.id;
   renderWorkspaceItems(state.items);
   renderWorkspaceRenders(state.renders, apiBaseUrl);
 }
 
-function resetWorkspaceView(message: string): void {
+function resetWorkspaceView(message: string, detail = ''): void {
   workspaceName.textContent = message;
+  workspaceIdCaption.textContent = detail;
   workspaceItemsSummary.textContent = '0 render-ready items out of 0';
   workspaceItems.innerHTML = '';
   workspaceRendersSummary.textContent = '0 renders in this workspace';
@@ -424,8 +565,14 @@ async function refreshWorkspaceView(): Promise<void> {
   const workspaceId = getWorkspaceId();
   const apiBaseUrl = getApiBaseUrl();
 
+  renderActiveWorkspaceSummary();
+
   if (!workspaceId) {
-    resetWorkspaceView('Set a workspace ID to load details.');
+    if (state.workspaces.length) {
+      resetWorkspaceView('No workspace selected', 'Choose a workspace above to load items and renders.');
+    } else {
+      resetWorkspaceView('No workspace selected', 'Create a workspace to get started.');
+    }
     return;
   }
 
@@ -433,6 +580,7 @@ async function refreshWorkspaceView(): Promise<void> {
     setWorkspaceLoadingState(true);
     setRenderLoadingState(true);
     workspaceName.textContent = 'Loading workspace…';
+    workspaceIdCaption.textContent = workspaceId;
     await fetchWorkspaceData(workspaceId, apiBaseUrl);
   } catch (error) {
     resetWorkspaceView('Unable to load workspace details.');
@@ -443,13 +591,71 @@ async function refreshWorkspaceView(): Promise<void> {
   }
 }
 
+async function refreshWorkspaceList(options?: { preserveStatus?: boolean }): Promise<void> {
+  const apiBaseUrl = getApiBaseUrl();
+
+  try {
+    setWorkspaceListLoadingState(true);
+
+    const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/workspaces`);
+    if (!response.ok) {
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to load workspaces (${response.status}).`)
+      );
+    }
+
+    const payload = (await response.json()) as WorkspaceListResponse;
+    state.workspaces = payload.data;
+
+    const activeWorkspace = getActiveWorkspace();
+    if (activeWorkspace) {
+      state.activeWorkspaceTitle = activeWorkspace.title;
+      await persistSettings();
+    } else if (state.activeWorkspaceId) {
+      state.activeWorkspaceId = '';
+      state.activeWorkspaceTitle = '';
+      await persistSettings();
+    }
+
+    renderWorkspacePicker();
+    renderActiveWorkspaceSummary();
+
+    if (!options?.preserveStatus) {
+      if (!state.workspaces.length) {
+        setStatus('No workspaces found yet. Create one to make it active.');
+      } else if (!state.activeWorkspaceId) {
+        setStatus('Select a workspace to make it active.');
+      }
+    }
+
+    await refreshWorkspaceView();
+  } catch (error) {
+    state.workspaces = [];
+    renderWorkspacePicker();
+    resetWorkspaceView('Unable to load workspace details.');
+    setStatus(error instanceof Error ? error.message : 'Failed to load workspaces.', true);
+  } finally {
+    setWorkspaceListLoadingState(false);
+  }
+}
+
+async function setActiveWorkspace(workspaceId: string): Promise<void> {
+  state.activeWorkspaceId = workspaceId;
+  state.activeWorkspaceTitle =
+    state.workspaces.find((workspace) => workspace.id === workspaceId)?.title ?? '';
+  renderWorkspacePicker();
+  renderActiveWorkspaceSummary();
+  await persistSettings();
+  await refreshWorkspaceView();
+}
+
 async function submitRenderRequest(): Promise<void> {
   const workspaceId = getWorkspaceId();
   const apiBaseUrl = getApiBaseUrl();
   const selectedReadyItems = getSelectedReadyItems();
 
   if (!workspaceId) {
-    setStatus('Workspace ID is required before creating a render.', true);
+    setStatus('Choose an active workspace before creating a render.', true);
     return;
   }
 
@@ -475,7 +681,9 @@ async function submitRenderRequest(): Promise<void> {
     );
 
     if (!response.ok) {
-      throw new Error(`Unable to create render (${response.status}).`);
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to create render (${response.status}).`)
+      );
     }
 
     const renderPayload = (await response.json()) as RenderResponse;
@@ -488,41 +696,93 @@ async function submitRenderRequest(): Promise<void> {
   }
 }
 
-async function loadSettings(): Promise<void> {
-  const result = await chrome.storage.local.get(SETTINGS_KEY);
-  const settings = (result[SETTINGS_KEY] ?? {}) as Partial<CaptureSettings>;
-
-  workspaceInput.value = settings.workspaceId ?? '';
-  apiBaseUrlInput.value = settings.apiBaseUrl ?? DEFAULT_API_BASE_URL;
-
-  await refreshWorkspaceView();
-}
-
-form.addEventListener('submit', (event) => {
-  event.preventDefault();
-
-  const workspaceId = getWorkspaceId();
+async function createWorkspaceFromPopup(): Promise<void> {
+  const title = newWorkspaceTitleInput.value.trim();
   const apiBaseUrl = getApiBaseUrl();
 
-  if (!workspaceId) {
-    setStatus('Workspace ID is required.', true);
+  if (!title) {
+    setStatus('Workspace title is required.', true);
     return;
   }
 
-  chrome.storage.local
-    .set({
-      [SETTINGS_KEY]: {
-        workspaceId,
-        apiBaseUrl
-      }
-    })
-    .then(() => {
-      setStatus('Saved workspace settings.');
-      return refreshWorkspaceView();
+  try {
+    setCreateWorkspaceState(true);
+
+    const response = await fetch(`${apiBaseUrl.replace(/\/$/, '')}/workspaces`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title,
+        domainType: DEFAULT_WORKSPACE_DOMAIN_TYPE
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to create workspace (${response.status}).`)
+      );
+    }
+
+    const payload = (await response.json()) as WorkspaceResponse;
+    state.workspaces = [payload.data, ...state.workspaces.filter((workspace) => workspace.id !== payload.data.id)];
+    newWorkspaceTitleInput.value = '';
+    setStatus(`Created workspace "${payload.data.title}" and set it active.`);
+    await setActiveWorkspace(payload.data.id);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Failed to create workspace.', true);
+  } finally {
+    setCreateWorkspaceState(false);
+  }
+}
+
+async function loadSettings(): Promise<void> {
+  const settings = await readSettings();
+
+  apiBaseUrlInput.value = settings.apiBaseUrl?.trim() || DEFAULT_API_BASE_URL;
+  state.activeWorkspaceId = settings.workspaceId?.trim() ?? '';
+  state.activeWorkspaceTitle = settings.workspaceTitle?.trim() ?? '';
+
+  renderWorkspacePicker();
+  renderActiveWorkspaceSummary();
+  await refreshWorkspaceList({ preserveStatus: true });
+}
+
+settingsForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+
+  persistSettings()
+    .then(async () => {
+      setStatus('Saved API settings. Refreshing workspaces…');
+      await refreshWorkspaceList({ preserveStatus: true });
     })
     .catch((error: unknown) => {
       setStatus(error instanceof Error ? error.message : 'Failed to save settings.', true);
     });
+});
+
+workspacePicker.addEventListener('change', () => {
+  void setActiveWorkspace(workspacePicker.value.trim())
+    .then(() => {
+      if (workspacePicker.value) {
+        setStatus('Active workspace updated.');
+      } else {
+        setStatus('Active workspace cleared.');
+      }
+    })
+    .catch((error: unknown) => {
+      setStatus(error instanceof Error ? error.message : 'Failed to update active workspace.', true);
+    });
+});
+
+refreshWorkspaceListButton.addEventListener('click', () => {
+  void refreshWorkspaceList();
+});
+
+createWorkspaceForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void createWorkspaceFromPopup();
 });
 
 refreshWorkspaceButton.addEventListener('click', () => {
@@ -537,5 +797,7 @@ submitRenderButton.addEventListener('click', () => {
   void submitRenderRequest();
 });
 
+renderWorkspacePicker();
+renderActiveWorkspaceSummary();
 updateSubmitButtonState();
 void loadSettings();

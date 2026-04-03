@@ -63,6 +63,19 @@
       #status {
         min-height: 16px;
       }
+      .form-row {
+        display: flex;
+        gap: 8px;
+        align-items: end;
+      }
+      .form-row > * {
+        flex: 1;
+      }
+      .form-row button {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 118px;
+      }
       .workspace-panel {
         margin-top: 16px;
         border-top: 1px solid #e5e7eb;
@@ -71,12 +84,30 @@
       #workspace-name {
         font-weight: 600;
       }
+      #workspace-id-caption {
+        margin-top: 2px;
+        color: #64748b;
+        word-break: break-all;
+      }
       .panel-actions {
         display: flex;
         gap: 8px;
       }
       .panel-actions button {
         margin-top: 0;
+      }
+      .workspace-picker-row {
+        display: flex;
+        gap: 8px;
+        align-items: end;
+      }
+      .workspace-picker-row > label {
+        flex: 1;
+        margin-top: 0;
+      }
+      .workspace-picker-row > button {
+        width: auto;
+        min-width: 96px;
       }
       #workspace-items,
       #workspace-renders {
@@ -211,25 +242,52 @@
       #workspace-renders-summary {
         color: #374151;
       }
+      .workspace-create-form {
+        margin-top: 10px;
+      }
     </style>
   </head>
   <body>
     <h1>Workspace Stylist</h1>
-    <p>Save clothing images to a workspace, select pieces, create renders, and review results.</p>
+    <p>Choose an active workspace, create one if needed, then save clothing images and request renders.</p>
 
     <form id="settings-form">
-      <label for="workspace-id">Workspace ID</label>
-      <input id="workspace-id" name="workspace-id" type="text" placeholder="cma123..." required />
-
-      <label for="api-base-url">API Base URL</label>
-      <input id="api-base-url" name="api-base-url" type="url" placeholder="http://localhost:4000" />
-
-      <button type="submit">Save settings</button>
+      <div class="form-row">
+        <label for="api-base-url">
+          API Base URL
+          <input id="api-base-url" name="api-base-url" type="url" placeholder="http://localhost:4000" />
+        </label>
+        <button type="submit">Save API URL</button>
+      </div>
     </form>
 
     <section class="workspace-panel" aria-live="polite">
+      <h2>Workspace</h2>
+      <div class="workspace-picker-row">
+        <label for="workspace-picker">
+          Active workspace
+          <select id="workspace-picker" name="workspace-picker">
+            <option value="">Loading workspaces…</option>
+          </select>
+        </label>
+        <button id="refresh-workspace-list" type="button">Refresh list</button>
+      </div>
+
+      <form id="create-workspace-form" class="workspace-create-form">
+        <div class="form-row">
+          <label for="new-workspace-title">
+            New workspace title
+            <input id="new-workspace-title" name="new-workspace-title" type="text" placeholder="Spring looks" />
+          </label>
+          <button id="create-workspace-button" type="submit">Create workspace</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="workspace-panel" aria-live="polite">
       <h2>Current workspace</h2>
-      <p id="workspace-name">Set a workspace ID to load details.</p>
+      <p id="workspace-name">No workspace selected</p>
+      <p id="workspace-id-caption">Choose a workspace above to make it active.</p>
       <div class="panel-actions">
         <button id="refresh-workspace" type="button">Refresh workspace</button>
       </div>
