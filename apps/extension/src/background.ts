@@ -13,6 +13,22 @@ interface ImageContextMessage {
   };
 }
 
+interface SaveImageFromPageMessage {
+  type: 'SAVE_IMAGE_FROM_PAGE';
+  payload: {
+    imageUrl: string;
+    pageUrl: string | null;
+    pageTitle: string | null;
+    altText: string | null;
+    surroundingText: string | null;
+  };
+}
+
+interface SaveImageFromPageResponse {
+  ok: boolean;
+  error?: string;
+}
+
 interface ContextMenuInfo {
   menuItemId: string;
   mediaType?: string;
@@ -163,6 +179,51 @@ async function saveCapture(info: ContextMenuInfo, tab?: BrowserTab): Promise<voi
   log('Capture saved successfully', { workspaceId, imageUrl });
 }
 
+async function saveCaptureFromPageMessage(payload: SaveImageFromPageMessage['payload']): Promise<void> {
+  const { workspaceId, apiBaseUrl } = await getSettings();
+  if (!workspaceId) {
+    throw new Error('Choose an active workspace in the extension popup before saving images.');
+  }
+
+  if (!payload.imageUrl) {
+    throw new Error('Could not determine image URL.');
+  }
+
+  const requestPayload = {
+    page_url: payload.pageUrl ?? '',
+    image_url: payload.imageUrl,
+    page_title: payload.pageTitle ?? '',
+    alt_text: payload.altText,
+    surrounding_text: payload.surroundingText,
+    raw_payload_json: {
+      capture_source: 'inline-button',
+      captured_at: new Date().toISOString()
+    }
+  };
+
+  const requestUrl = `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/captures`;
+  const response = await fetch(requestUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestPayload)
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Request failed (${response.status})`;
+    try {
+      const body = (await response.json()) as { error?: { message?: string } };
+      if (body.error?.message) {
+        errorMessage = body.error.message;
+      }
+    } catch {
+      // Ignore JSON parse errors.
+    }
+    throw new Error(errorMessage);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   log('Extension installed or updated, creating context menu');
   chrome.contextMenus.create({
@@ -185,15 +246,36 @@ chrome.contextMenus.onClicked.addListener((info: ContextMenuInfo, tab: BrowserTa
   });
 });
 
-chrome.runtime.onMessage.addListener((message: unknown, sender: { tab?: BrowserTab }) => {
-  const typedMessage = message as Partial<ImageContextMessage>;
-  if (typedMessage.type !== 'IMAGE_CONTEXT_UPDATED' || !typedMessage.payload || !sender.tab?.id) {
-    return;
-  }
+chrome.runtime.onMessage.addListener(
+  (
+    message: unknown,
+    sender: { tab?: BrowserTab },
+    sendResponse: (response: SaveImageFromPageResponse) => void
+  ) => {
+    const typedMessage = message as { type?: string; payload?: unknown };
 
-  log('Received image context update', {
-    tabId: sender.tab.id,
-    payload: typedMessage.payload
-  });
-  tabImageContext.set(sender.tab.id, typedMessage.payload);
-});
+    if (typedMessage.type === 'IMAGE_CONTEXT_UPDATED' && typedMessage.payload && sender.tab?.id) {
+      const contextPayload = typedMessage.payload as ImageContextMessage['payload'];
+      log('Received image context update', {
+        tabId: sender.tab.id,
+        payload: contextPayload
+      });
+      tabImageContext.set(sender.tab.id, contextPayload);
+      return;
+    }
+
+    if (typedMessage.type !== 'SAVE_IMAGE_FROM_PAGE' || !typedMessage.payload) {
+      return;
+    }
+
+    void saveCaptureFromPageMessage(typedMessage.payload as SaveImageFromPageMessage['payload'])
+      .then(() => {
+        sendResponse({ ok: true });
+      })
+      .catch((error) => {
+        sendResponse({ ok: false, error: getErrorMessage(error) });
+      });
+
+    return true;
+  }
+);
