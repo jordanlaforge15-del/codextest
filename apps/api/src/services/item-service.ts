@@ -8,7 +8,10 @@ import {
   listItemsByWorkspace,
   updateItemById
 } from '../repositories/item-repository.js';
-import { getWorkspaceById } from '../repositories/workspace-repository.js';
+import {
+  getWorkspaceById,
+  updateWorkspaceSelectedItemIdsById
+} from '../repositories/workspace-repository.js';
 import { ingestImageFromUrl } from './image-ingestion-service.js';
 import {
   buildNormalizedItemFields,
@@ -160,4 +163,15 @@ export async function deleteItemService(workspaceId: string, itemId: string): Pr
   }
 
   await deleteItemById(itemId);
+
+  const workspace = await getWorkspaceById(workspaceId);
+  if (!workspace) {
+    return;
+  }
+
+  const selectedItemIds = Array.isArray(workspace.selectedItemIds)
+    ? workspace.selectedItemIds.filter((value): value is string => typeof value === 'string' && value !== itemId)
+    : [];
+
+  await updateWorkspaceSelectedItemIdsById(workspaceId, selectedItemIds);
 }

@@ -5,14 +5,25 @@ import {
   deleteWorkspaceById,
   getWorkspaceById,
   listWorkspaces,
+  updateWorkspaceSelectedItemIdsById,
   updateWorkspaceById
 } from '../repositories/workspace-repository.js';
+import { listItemsByIds } from '../repositories/item-repository.js';
+
+function parseSelectedItemIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
 
 function toWorkspaceResponse(workspace: {
   id: string;
   title: string;
   intentionText: string | null;
   domainType: string;
+  selectedItemIds: unknown;
   createdAt: Date;
   updatedAt: Date;
 }): Workspace {
@@ -21,6 +32,7 @@ function toWorkspaceResponse(workspace: {
     title: workspace.title,
     intentionText: workspace.intentionText,
     domainType: workspace.domainType as Workspace['domainType'],
+    selectedItemIds: parseSelectedItemIds(workspace.selectedItemIds),
     createdAt: workspace.createdAt.toISOString(),
     updatedAt: workspace.updatedAt.toISOString()
   };
@@ -72,4 +84,22 @@ export async function updateWorkspaceService(
 export async function deleteWorkspaceService(workspaceId: string): Promise<void> {
   await getWorkspaceService(workspaceId);
   await deleteWorkspaceById(workspaceId);
+}
+
+export async function updateWorkspaceSelectedItemsService(
+  workspaceId: string,
+  input: { selectedItemIds: string[] }
+): Promise<Workspace> {
+  await getWorkspaceService(workspaceId);
+
+  const selectedItemIds = Array.from(new Set(input.selectedItemIds));
+  if (selectedItemIds.length > 0) {
+    const items = await listItemsByIds(selectedItemIds);
+    if (items.length !== selectedItemIds.length || items.some((item) => item.workspaceId !== workspaceId)) {
+      throw new HttpError(400, 'Selected items must belong to the workspace');
+    }
+  }
+
+  const workspace = await updateWorkspaceSelectedItemIdsById(workspaceId, selectedItemIds);
+  return toWorkspaceResponse(workspace);
 }

@@ -144,6 +144,24 @@ function getActiveWorkspace(): Workspace | null {
   return state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ?? null;
 }
 
+async function persistSelectedItems(workspaceId: string, selectedItemIds: string[]): Promise<void> {
+  await fetch(`${getApiBaseUrl().replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/selected-items`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      selectedItemIds
+    })
+  }).then(async (response) => {
+    if (!response.ok) {
+      throw new Error(
+        await getResponseErrorMessage(response, `Unable to save selected items (${response.status}).`)
+      );
+    }
+  });
+}
+
 function buildStoredSettings(): CaptureSettings {
   const activeWorkspace = getActiveWorkspace();
 
@@ -412,8 +430,20 @@ function renderWorkspaceItems(items: Item[]): void {
 
     const isReady = Boolean(item.imageUrl) && Boolean(item.storedImagePath);
     checkbox.disabled = !isReady;
-    checkbox.addEventListener('change', () => {
+    checkbox.addEventListener('change', async () => {
+      const previousChecked = !checkbox.checked;
       toggleItemSelection(item.id, checkbox.checked);
+
+      try {
+        await persistSelectedItems(
+          getWorkspaceId(),
+          Array.from(state.selectedItemIds)
+        );
+      } catch (error) {
+        toggleItemSelection(item.id, previousChecked);
+        checkbox.checked = previousChecked;
+        setStatus(error instanceof Error ? error.message : 'Failed to save selected items.', true);
+      }
     });
 
     const preview = document.createElement('div');
@@ -719,6 +749,7 @@ async function fetchWorkspaceData(workspaceId: string, apiBaseUrl: string): Prom
 
   state.items = itemsPayload.data;
   state.renders = rendersPayload.data;
+  state.selectedItemIds = new Set(workspacePayload.data.selectedItemIds);
 
   workspaceName.textContent = workspacePayload.data.title;
   workspaceIdCaption.textContent = workspacePayload.data.id;
