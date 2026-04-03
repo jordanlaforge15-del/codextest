@@ -18,7 +18,12 @@ const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const scrypt = promisify(scryptCb);
 
 function getAuthSecret(): string {
-  return process.env.AUTH_JWT_SECRET?.trim() || 'dev-only-change-me';
+  const secret = process.env.AUTH_JWT_SECRET?.trim();
+  if (!secret) {
+    throw new Error('AUTH_JWT_SECRET must be set');
+  }
+
+  return secret;
 }
 
 async function hashPassword(password: string): Promise<string> {

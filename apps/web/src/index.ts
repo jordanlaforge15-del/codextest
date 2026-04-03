@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { type Express } from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import process from 'node:process';
 import type { Item, Render, Workspace } from '@mvp/shared';
 import { getPreferredWorkspaceThumbnail, normalizeBaseUrl, resolveAssetUrl } from './asset-url.js';
 
@@ -77,7 +78,7 @@ function flashMarkup(flash: Flash): string {
     return '';
   }
 
-  return `<p class="flash flash-${flash.type}">${flash.message}</p>`;
+  return `<p class="flash flash-${flash.type}">${escapeHtml(flash.message)}</p>`;
 }
 
 function authFormPage(params: {
@@ -144,7 +145,15 @@ async function requireToken(req: express.Request, res: express.Response): Promis
     res.redirect('/login');
     return null;
   }
-  return token;
+
+  try {
+    await fetchApi('/auth/me', {}, token);
+    return token;
+  } catch {
+    res.clearCookie(authCookieName);
+    res.redirect('/login');
+    return null;
+  }
 }
 
 function groupRenders(renders: Render[]): Record<'up' | 'neutral' | 'down' | 'unvoted', Render[]> {
@@ -337,35 +346,54 @@ function renderWorkspaceList(params: {
     .join('')}</div>`;
 }
 
-const app: Express = express();
-app.use(express.urlencoded({ extended: false }));
-app.use(express.static(publicDir));
+export function createApp(): Express {
+  const app: Express = express();
+  app.use(express.urlencoded({ extended: false }));
+  app.use(express.static(publicDir, { index: false }));
 
-app.get('/', (req, res) => {
-  res.redirect(getAuthToken(req) ? '/home' : '/login');
-});
+  app.get('/', async (req, res) => {
+    const token = getAuthToken(req);
+    if (!token) {
+      res.redirect('/login');
+      return;
+    }
 
-app.get('/login', (req, res) => {
-  if (getAuthToken(req)) {
-    res.redirect('/home');
-    return;
-  }
+    try {
+      await fetchApi('/auth/me', {}, token);
+      res.redirect('/home');
+    } catch {
+      res.clearCookie(authCookieName);
+      res.redirect('/login');
+    }
+  });
 
-  const flash = req.query.error ? { type: 'error' as const, message: String(req.query.error) } : null;
-  res.send(
-    authFormPage({
-      title: 'Login',
-      heading: 'Log in',
-      action: '/login',
-      submitLabel: 'Log in',
-      alternateHref: '/signup',
-      alternateLabel: 'Create account',
-      flash
-    })
-  );
-});
+  app.get('/login', async (req, res) => {
+    const token = getAuthToken(req);
+    if (token) {
+      try {
+        await fetchApi('/auth/me', {}, token);
+        res.redirect('/home');
+        return;
+      } catch {
+        res.clearCookie(authCookieName);
+      }
+    }
 
-app.post('/login', async (req, res) => {
+    const flash = req.query.error ? { type: 'error' as const, message: String(req.query.error) } : null;
+    res.send(
+      authFormPage({
+        title: 'Login',
+        heading: 'Log in',
+        action: '/login',
+        submitLabel: 'Log in',
+        alternateHref: '/signup',
+        alternateLabel: 'Create account',
+        flash
+      })
+    );
+  });
+
+  app.post('/login', async (req, res) => {
   try {
     const data = await fetchApi<{ token: string }>('/auth/login', {
       method: 'POST',
@@ -381,9 +409,9 @@ app.post('/login', async (req, res) => {
     const message = error instanceof Error ? error.message : 'Login failed';
     res.redirect(`/login?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.get('/signup', (req, res) => {
+  app.get('/signup', (req, res) => {
   const flash = req.query.error
     ? { type: 'error' as const, message: String(req.query.error) }
     : req.query.success
@@ -402,9 +430,9 @@ app.get('/signup', (req, res) => {
       includeNameField: true
     })
   );
-});
+  });
 
-app.post('/signup', async (req, res) => {
+  app.post('/signup', async (req, res) => {
   try {
     await fetchApi('/auth/signup', {
       method: 'POST',
@@ -420,14 +448,14 @@ app.post('/signup', async (req, res) => {
     const message = error instanceof Error ? error.message : 'Signup failed';
     res.redirect(`/signup?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.post('/logout', (_req, res) => {
-  res.clearCookie(authCookieName);
-  res.redirect('/login');
-});
+  app.post('/logout', (_req, res) => {
+    res.clearCookie(authCookieName);
+    res.redirect('/login');
+  });
 
-app.get('/home', async (req, res) => {
+  app.get('/home', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -468,9 +496,9 @@ app.get('/home', async (req, res) => {
   } catch {
     res.status(500).send(htmlPage('Home', '<p>Failed to load workspaces.</p>'));
   }
-});
+  });
 
-app.post('/home/workspaces', async (req, res) => {
+  app.post('/home/workspaces', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -492,9 +520,9 @@ app.post('/home/workspaces', async (req, res) => {
   } catch {
     res.redirect('/home');
   }
-});
+  });
 
-app.post('/home/workspaces/:workspaceId/delete', async (req, res) => {
+  app.post('/home/workspaces/:workspaceId/delete', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -514,9 +542,9 @@ app.post('/home/workspaces/:workspaceId/delete', async (req, res) => {
     const message = error instanceof Error ? error.message : 'Failed to delete workspace';
     res.redirect(`/home?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.post('/workspaces/:workspaceId/items/:itemId/delete', async (req, res) => {
+  app.post('/workspaces/:workspaceId/items/:itemId/delete', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -537,9 +565,9 @@ app.post('/workspaces/:workspaceId/items/:itemId/delete', async (req, res) => {
     const message = error instanceof Error ? error.message : 'Failed to delete item';
     res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.post('/workspaces/:workspaceId/renders/:renderId/vote', async (req, res) => {
+  app.post('/workspaces/:workspaceId/renders/:renderId/vote', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -567,9 +595,9 @@ app.post('/workspaces/:workspaceId/renders/:renderId/vote', async (req, res) => 
     const message = error instanceof Error ? error.message : 'Failed to save render vote';
     res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.get('/workspaces/:workspaceId', async (req, res) => {
+  app.get('/workspaces/:workspaceId', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -586,9 +614,9 @@ app.get('/workspaces/:workspaceId', async (req, res) => {
   } catch {
     res.status(404).send(htmlPage('Workspace', '<p>Workspace not found.</p><p><a href="/home">Back to home</a></p>'));
   }
-});
+  });
 
-app.post('/workspaces/:workspaceId/renders', async (req, res) => {
+  app.post('/workspaces/:workspaceId/renders', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
 
@@ -617,8 +645,15 @@ app.post('/workspaces/:workspaceId/renders', async (req, res) => {
     const message = error instanceof Error ? error.message : 'Failed to request render';
     res.redirect(`/workspaces/${workspaceId}?error=${encodeURIComponent(message)}`);
   }
-});
+  });
 
-app.listen(port, () => {
-  console.log(`Web app listening on http://localhost:${port}`);
-});
+  return app;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  const app = createApp();
+
+  app.listen(port, () => {
+    console.log(`Web app listening on http://localhost:${port}`);
+  });
+}

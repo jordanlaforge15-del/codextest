@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/asset-url.test.ts"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@mvp/shared": "workspace:*",
