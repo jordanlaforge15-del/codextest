@@ -48,6 +48,7 @@ interface PopupState {
 const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
 const DEFAULT_WORKSPACE_DOMAIN_TYPE = 'outfit';
+const RENDER_POLL_INTERVAL_MS = 3000;
 
 const settingsFormElement = document.querySelector<HTMLFormElement>('#settings-form');
 const apiBaseUrlInputElement = document.querySelector<HTMLInputElement>('#api-base-url');
@@ -123,6 +124,8 @@ const state: PopupState = {
   activeWorkspaceId: '',
   activeWorkspaceTitle: ''
 };
+
+let renderPollTimer: number | null = null;
 
 function setStatus(message: string, isError = false): void {
   statusElement.textContent = message;
@@ -247,6 +250,30 @@ function getRenderImageUrl(apiBaseUrl: string, render: Render): string | null {
   }
 
   return `${apiBaseUrl.replace(/\/$/, '')}${render.outputImageUrl}`;
+}
+
+function hasActiveRenders(renders: Render[]): boolean {
+  return renders.some((render) => render.status === 'queued' || render.status === 'processing');
+}
+
+function clearRenderPollTimer(): void {
+  if (renderPollTimer !== null) {
+    window.clearTimeout(renderPollTimer);
+    renderPollTimer = null;
+  }
+}
+
+function scheduleRenderPolling(): void {
+  clearRenderPollTimer();
+
+  const workspaceId = getWorkspaceId();
+  if (!workspaceId || !hasActiveRenders(state.renders)) {
+    return;
+  }
+
+  renderPollTimer = window.setTimeout(() => {
+    void pollQueuedRenders(workspaceId);
+  }, RENDER_POLL_INTERVAL_MS);
 }
 
 function formatWorkspaceOption(workspace: Workspace): string {
@@ -549,6 +576,42 @@ function renderWorkspaceRenders(renders: Render[], apiBaseUrl: string): void {
   }
 }
 
+async function fetchWorkspaceRenders(workspaceId: string, apiBaseUrl: string): Promise<Render[]> {
+  const rendersUrl = `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/renders`;
+  const response = await fetch(rendersUrl);
+
+  if (!response.ok) {
+    throw new Error(
+      await getResponseErrorMessage(response, `Unable to load renders (${response.status}).`)
+    );
+  }
+
+  const payload = (await response.json()) as RenderListResponse;
+  return payload.data;
+}
+
+async function pollQueuedRenders(workspaceId: string): Promise<void> {
+  if (workspaceId !== getWorkspaceId()) {
+    clearRenderPollTimer();
+    return;
+  }
+
+  try {
+    const renders = await fetchWorkspaceRenders(workspaceId, getApiBaseUrl());
+    if (workspaceId !== getWorkspaceId()) {
+      clearRenderPollTimer();
+      return;
+    }
+
+    state.renders = renders;
+    renderWorkspaceRenders(state.renders, getApiBaseUrl());
+    scheduleRenderPolling();
+  } catch (error) {
+    clearRenderPollTimer();
+    setStatus(error instanceof Error ? error.message : 'Failed to refresh queued renders.', true);
+  }
+}
+
 async function submitRenderVote(renderId: string, vote: RenderVoteValue): Promise<RenderVote | null> {
   const workspaceId = getWorkspaceId();
   const apiBaseUrl = getApiBaseUrl();
@@ -661,9 +724,11 @@ async function fetchWorkspaceData(workspaceId: string, apiBaseUrl: string): Prom
   workspaceIdCaption.textContent = workspacePayload.data.id;
   renderWorkspaceItems(state.items);
   renderWorkspaceRenders(state.renders, apiBaseUrl);
+  scheduleRenderPolling();
 }
 
 function resetWorkspaceView(message: string, detail = ''): void {
+  clearRenderPollTimer();
   workspaceName.textContent = message;
   workspaceIdCaption.textContent = detail;
   workspaceItemsSummary.textContent = '0 render-ready items out of 0';
@@ -755,6 +820,7 @@ async function refreshWorkspaceList(options?: { preserveStatus?: boolean }): Pro
 }
 
 async function setActiveWorkspace(workspaceId: string): Promise<void> {
+  clearRenderPollTimer();
   state.activeWorkspaceId = workspaceId;
   state.activeWorkspaceTitle =
     state.workspaces.find((workspace) => workspace.id === workspaceId)?.title ?? '';
@@ -962,3 +1028,7 @@ renderWorkspacePicker();
 renderActiveWorkspaceSummary();
 updateSubmitButtonState();
 void loadSettings();
+
+window.addEventListener('unload', () => {
+  clearRenderPollTimer();
+});
