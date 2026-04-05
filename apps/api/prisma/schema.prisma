@@ -49,6 +49,7 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   name         String?
+  profileImagePath String? @map("profile_image_path")
   role         UserRole @default(user)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -104,6 +105,7 @@ model Render {
   status              RenderStatus @default(queued)
   renderMode          RenderMode   @default(preview) @map("render_mode")
   selectedItemIds     Json         @map("selected_item_ids")
+  personImagePath     String?      @map("person_image_path")
   recommendationText  String?      @map("recommendation_text")
   recommendationLabel String?      @map("recommendation_label")
   outputImagePath     String?      @map("output_image_path")

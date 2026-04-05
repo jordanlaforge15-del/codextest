@@ -5,6 +5,7 @@ import {
   renderVoteSchema,
   workspaceRendersPathSchema
 } from '../schemas/render-schemas.js';
+import { authenticateToken } from '../services/auth-service.js';
 import { createRenderService, getRenderService, listRendersService } from '../services/render-service.js';
 import { getRenderVoteService, upsertRenderVoteService } from '../services/render-vote-service.js';
 
@@ -14,7 +15,13 @@ renderRouter.post('/workspaces/:workspaceId/renders', async (req, res, next) => 
   try {
     const { workspaceId } = workspaceRendersPathSchema.parse(req.params);
     const payload = createRenderSchema.parse(req.body);
-    const render = await createRenderService(workspaceId, payload);
+    const authorization = req.headers.authorization;
+    const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
+    const user = token ? await authenticateToken(token) : null;
+    const render = await createRenderService(workspaceId, {
+      ...payload,
+      personImagePath: user?.profileImagePath ?? null
+    });
     res.status(201).json({ data: render });
   } catch (error) {
     next(error);

@@ -59,5 +59,15 @@ describe('buildRenderPrompt', () => {
     expect(prompt).toContain('should look happy');
     expect(prompt).toContain('must not contain any nudity');
     expect(prompt).toContain('must not be displaying any offensive hand gestures');
+    expect(prompt).toContain('safe, non-explicit apparel image');
+  });
+
+  it('adds person-reference safety guidance when a profile photo is provided', () => {
+    const prompt = buildRenderPrompt(workspace, items, { usePersonReference: true });
+
+    expect(prompt).toContain('Use the provided person photo as the identity, body, face, hair, and pose reference');
+    expect(prompt).toContain('render the supplied garments onto that same person');
+    expect(prompt).toContain('ignore it and instead render a generic safe adult model');
+    expect(prompt).toContain('shows more than one person');
   });
 });

@@ -2,13 +2,20 @@ import { createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import type { User } from '@prisma/client';
 import { HttpError } from '../errors/http-error.js';
-import { createUser, getUserByEmail, getUserById } from '../repositories/user-repository.js';
+import {
+  createUser,
+  getUserByEmail,
+  getUserById,
+  updateUserProfileImagePathById
+} from '../repositories/user-repository.js';
+import { ingestProfileImageFromDataUrl, toProfileImageUrl } from './profile-image-service.js';
 
 interface AuthResponse {
   user: {
     id: string;
     email: string;
     name: string | null;
+    profileImageUrl: string | null;
     createdAt: string;
   };
   token: string;
@@ -55,13 +62,14 @@ function buildToken(userId: string): string {
 }
 
 function parseToken(token: string): { userId: string; expiresAt: number } | null {
+  const secret = getAuthSecret();
   const [userId, expiresAtRaw, signature] = token.split('.');
   if (!userId || !expiresAtRaw || !signature) {
     return null;
   }
 
   const payload = `${userId}.${expiresAtRaw}`;
-  const expectedSignature = createHmac('sha256', getAuthSecret()).update(payload).digest('hex');
+  const expectedSignature = createHmac('sha256', secret).update(payload).digest('hex');
   const sigBuffer = Buffer.from(signature, 'hex');
   const expectedBuffer = Buffer.from(expectedSignature, 'hex');
   if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
@@ -82,10 +90,25 @@ function toAuthResponse(user: User): AuthResponse {
       id: user.id,
       email: user.email,
       name: user.name,
+      profileImageUrl: toProfileImageUrl(user.profileImagePath),
       createdAt: user.createdAt.toISOString()
     },
     token: buildToken(user.id)
   };
+}
+
+export async function authenticateToken(token: string): Promise<User> {
+  const parsed = parseToken(token);
+  if (!parsed) {
+    throw new HttpError(401, 'Unauthorized');
+  }
+
+  const user = await getUserById(parsed.userId);
+  if (!user) {
+    throw new HttpError(401, 'Unauthorized');
+  }
+
+  return user;
 }
 
 export async function signupService(input: { email: string; password: string; name?: string }): Promise<AuthResponse> {
@@ -119,20 +142,30 @@ export async function loginService(input: { email: string; password: string }): 
 }
 
 export async function meService(token: string): Promise<AuthResponse['user']> {
-  const parsed = parseToken(token);
-  if (!parsed) {
-    throw new HttpError(401, 'Unauthorized');
-  }
-
-  const user = await getUserById(parsed.userId);
-  if (!user) {
-    throw new HttpError(401, 'Unauthorized');
-  }
+  const user = await authenticateToken(token);
 
   return {
     id: user.id,
     email: user.email,
     name: user.name,
+    profileImageUrl: toProfileImageUrl(user.profileImagePath),
     createdAt: user.createdAt.toISOString()
+  };
+}
+
+export async function updateProfileImageService(
+  token: string,
+  input: { imageDataUrl: string }
+): Promise<AuthResponse['user']> {
+  const user = await authenticateToken(token);
+  const profileImage = await ingestProfileImageFromDataUrl(user.id, input.imageDataUrl);
+  const updatedUser = await updateUserProfileImagePathById(user.id, profileImage.storedImagePath);
+
+  return {
+    id: updatedUser.id,
+    email: updatedUser.email,
+    name: updatedUser.name,
+    profileImageUrl: toProfileImageUrl(updatedUser.profileImagePath),
+    createdAt: updatedUser.createdAt.toISOString()
   };
 }

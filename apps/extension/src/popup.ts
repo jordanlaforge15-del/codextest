@@ -49,6 +49,7 @@ const SETTINGS_KEY = 'captureSettings';
 const DEFAULT_API_BASE_URL = 'http://localhost:4000';
 const DEFAULT_WORKSPACE_DOMAIN_TYPE = 'outfit';
 const RENDER_POLL_INTERVAL_MS = 3000;
+const AUTH_COOKIE_NAME = 'mvp_auth_token';
 
 const settingsFormElement = document.querySelector<HTMLFormElement>('#settings-form');
 const apiBaseUrlInputElement = document.querySelector<HTMLInputElement>('#api-base-url');
@@ -134,6 +135,16 @@ function setStatus(message: string, isError = false): void {
 
 function getApiBaseUrl(): string {
   return apiBaseUrlInput.value.trim() || DEFAULT_API_BASE_URL;
+}
+
+async function getAuthTokenForBaseUrl(baseUrl: string): Promise<string | null> {
+  const parsedUrl = new URL(baseUrl);
+  const cookie = await chrome.cookies.get({
+    url: `${parsedUrl.protocol}//${parsedUrl.hostname}/`,
+    name: AUTH_COOKIE_NAME
+  });
+
+  return cookie?.value ?? null;
 }
 
 function getWorkspaceId(): string {
@@ -878,13 +889,20 @@ async function submitRenderRequest(): Promise<void> {
 
   try {
     setRenderSubmitState(true);
+    const authToken = await getAuthTokenForBaseUrl(apiBaseUrl);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(
       `${apiBaseUrl.replace(/\/$/, '')}/workspaces/${encodeURIComponent(workspaceId)}/renders`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           selectedItemIds: selectedReadyItems.map((item) => item.id),
           renderMode: renderModeSelect.value as RenderMode

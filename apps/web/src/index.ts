@@ -24,6 +24,13 @@ function parseCookies(header: string | undefined): Record<string, string> {
 }
 
 type Flash = { type: 'error' | 'success'; message: string } | null;
+type AccountUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  profileImageUrl: string | null;
+  createdAt: string;
+};
 
 function getAuthToken(req: express.Request): string | null {
   const token = parseCookies(req.headers.cookie)[authCookieName];
@@ -211,7 +218,10 @@ function renderWorkspacePage(params: {
     `${params.workspace.title} · Workspace`,
     `
       <header class="topbar">
-        <a href="/home">← Home</a>
+        <div class="topbar-links">
+          <a href="/home">← Home</a>
+          <a href="/account">Account</a>
+        </div>
         <form method="post" action="/logout"><button type="submit">Log out</button></form>
       </header>
       <section class="panel">
@@ -311,6 +321,53 @@ function renderWorkspacePage(params: {
   );
 }
 
+function renderAccountPage(params: { user: AccountUser; flash: Flash }): string {
+  const profileImageUrl = resolveAssetUrl(apiBaseUrl, params.user.profileImageUrl);
+
+  return htmlPage(
+    'Account',
+    `
+      <header class="topbar">
+        <div class="topbar-links">
+          <a href="/home">← Home</a>
+          <a href="/account">Account</a>
+        </div>
+        <form method="post" action="/logout"><button type="submit">Log out</button></form>
+      </header>
+      <section class="panel stack">
+        <h1>Account</h1>
+        <p>Upload a clear photo of yourself so outfit renders can place the selected clothing onto your body instead of a generic model.</p>
+        ${flashMarkup(params.flash)}
+      </section>
+      <section class="panel stack">
+        <h2>Profile</h2>
+        <p><strong>Name:</strong> ${escapeHtml(params.user.name || 'Not set')}</p>
+        <p><strong>Email:</strong> ${escapeHtml(params.user.email)}</p>
+        <p><strong>Member since:</strong> ${new Date(params.user.createdAt).toLocaleString()}</p>
+        <div class="profile-image-block">
+          ${
+            profileImageUrl
+              ? `<img class="profile-image-preview" src="${escapeHtml(profileImageUrl)}" alt="Profile reference" />`
+              : '<div class="profile-image-placeholder">No profile image uploaded yet.</div>'
+          }
+        </div>
+        <form class="stack" data-profile-image-form>
+          <label>
+            Upload a photo of yourself
+            <input type="file" name="profileImage" accept="image/*" required />
+          </label>
+          <p class="muted">
+            Use a single-person photo with a clear face and preferably a full-body pose. Unsafe or irrelevant uploads should be ignored by the render prompt, but this is only a short-term safety layer.
+          </p>
+          <button type="submit">Upload profile image</button>
+          <p class="status-message" data-profile-image-status aria-live="polite"></p>
+        </form>
+      </section>
+      <script src="/account-profile.js"></script>
+    `
+  );
+}
+
 function renderWorkspaceList(params: {
   workspaces: Workspace[];
   rendersByWorkspaceId: Map<string, Render[]>;
@@ -349,7 +406,7 @@ function renderWorkspaceList(params: {
 
 export function createApp(): Express {
   const app: Express = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '12mb' }));
   app.use(express.urlencoded({ extended: false }));
   app.use(express.static(publicDir, { index: false }));
 
@@ -457,6 +514,51 @@ export function createApp(): Express {
     res.redirect('/login');
   });
 
+  app.get('/account', async (req, res) => {
+    const token = await requireToken(req, res);
+    if (!token) return;
+
+    try {
+      const user = await fetchApi<AccountUser>('/auth/me', {}, token);
+      const flash = req.query.error
+        ? { type: 'error' as const, message: String(req.query.error) }
+        : req.query.success
+          ? { type: 'success' as const, message: String(req.query.success) }
+          : null;
+      res.send(renderAccountPage({ user, flash }));
+    } catch {
+      res.status(500).send(htmlPage('Account', '<p>Failed to load account details.</p>'));
+    }
+  });
+
+  app.post('/account/profile-image', async (req, res) => {
+    const token = await requireToken(req, res);
+    if (!token) return;
+
+    try {
+      const user = await fetchApi<AccountUser>(
+        '/auth/profile-image',
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            imageDataUrl: String(req.body.imageDataUrl ?? '')
+          })
+        },
+        token
+      );
+
+      res.status(200).json({
+        data: {
+          ...user,
+          profileImageUrl: resolveAssetUrl(apiBaseUrl, user.profileImageUrl)
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload profile image';
+      res.status(400).json({ error: { message } });
+    }
+  });
+
   app.get('/home', async (req, res) => {
   const token = await requireToken(req, res);
   if (!token) return;
@@ -477,7 +579,10 @@ export function createApp(): Express {
         'Home',
         `
           <header class="topbar">
-            <h1>Workspaces</h1>
+            <div class="topbar-links">
+              <h1>Workspaces</h1>
+              <a href="/account">Account</a>
+            </div>
             <form method="post" action="/logout"><button type="submit">Log out</button></form>
           </header>
           <section class="panel">

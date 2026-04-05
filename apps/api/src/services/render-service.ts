@@ -55,7 +55,11 @@ async function assertWorkspaceExists(workspaceId: string): Promise<void> {
 
 export async function createRenderService(
   workspaceId: string,
-  input: { selectedItemIds: string[]; renderMode: 'preview' | 'high_quality' }
+  input: {
+    selectedItemIds: string[];
+    renderMode: 'preview' | 'high_quality';
+    personImagePath?: string | null;
+  }
 ): Promise<RenderDto> {
   await assertWorkspaceExists(workspaceId);
 
@@ -69,6 +73,7 @@ export async function createRenderService(
     workspaceId,
     renderMode: input.renderMode,
     selectedItemIds,
+    personImagePath: input.personImagePath ?? null,
     status: 'queued',
     outputImagePath: null,
     errorMessage: null

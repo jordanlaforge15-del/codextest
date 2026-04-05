@@ -7,7 +7,7 @@ describe('auth secret configuration', () => {
 
   it('fails fast when AUTH_JWT_SECRET is missing', async () => {
     const original = process.env.AUTH_JWT_SECRET;
-    delete process.env.AUTH_JWT_SECRET;
+    process.env.AUTH_JWT_SECRET = '';
 
     try {
       const { meService } = await import('../src/services/auth-service.js');

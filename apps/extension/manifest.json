@@ -3,7 +3,7 @@
   "name": "Workspace Capture (MVP)",
   "version": "0.0.1",
   "description": "Capture webpage images and save them to a workspace.",
-  "permissions": ["activeTab", "contextMenus", "notifications", "storage"],
+  "permissions": ["activeTab", "contextMenus", "cookies", "notifications", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "dist/background.js",

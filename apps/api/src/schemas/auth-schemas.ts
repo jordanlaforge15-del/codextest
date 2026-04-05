@@ -10,3 +10,7 @@ export const loginSchema = z.object({
   email: z.string().email().trim().toLowerCase(),
   password: z.string().min(8).max(128)
 });
+
+export const updateProfileImageSchema = z.object({
+  imageDataUrl: z.string().min(1)
+});

@@ -102,3 +102,47 @@ test('invalid auth cookies are rejected by route guards', async () => {
     restore.mock.restore();
   }
 });
+
+test('GET /account renders profile image upload UI for authenticated users', async () => {
+  const originalFetch = globalThis.fetch;
+  const restore = mock.method(globalThis, 'fetch', async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/auth/me')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: 'user-1',
+            email: 'user@example.com',
+            name: 'Jordan',
+            profileImageUrl: '/assets/profile-images/user-1.png',
+            createdAt: new Date().toISOString()
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    return originalFetch(input, init);
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/account`, {
+        headers: {
+          Cookie: 'mvp_auth_token=valid-token'
+        }
+      });
+      const text = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(text, /Upload a photo of yourself/);
+      assert.match(text, /account-profile\.js/);
+      assert.match(text, /http:\/\/localhost:4000\/assets\/profile-images\/user-1\.png/);
+    });
+  } finally {
+    restore.mock.restore();
+  }
+});
