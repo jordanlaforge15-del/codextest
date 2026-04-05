@@ -1,7 +1,12 @@
 import { Router, type Router as RouterType } from 'express';
 import { HttpError } from '../errors/http-error.js';
-import { loginSchema, signupSchema } from '../schemas/auth-schemas.js';
-import { loginService, meService, signupService } from '../services/auth-service.js';
+import { loginSchema, signupSchema, updateProfileImageSchema } from '../schemas/auth-schemas.js';
+import {
+  loginService,
+  meService,
+  signupService,
+  updateProfileImageService
+} from '../services/auth-service.js';
 
 export const authRouter: RouterType = Router();
 
@@ -34,6 +39,22 @@ authRouter.get('/auth/me', async (req, res, next) => {
     }
 
     const user = await meService(token);
+    res.status(200).json({ data: user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.put('/auth/profile-image', async (req, res, next) => {
+  try {
+    const authorization = req.headers.authorization;
+    const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : null;
+    if (!token) {
+      throw new HttpError(401, 'Unauthorized');
+    }
+
+    const payload = updateProfileImageSchema.parse(req.body);
+    const user = await updateProfileImageService(token, payload);
     res.status(200).json({ data: user });
   } catch (error) {
     next(error);

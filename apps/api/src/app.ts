@@ -8,13 +8,15 @@ import { captureRouter } from './routes/capture-routes.js';
 import { itemRouter } from './routes/item-routes.js';
 import { renderRouter } from './routes/render-routes.js';
 import { workspaceRouter } from './routes/workspace-routes.js';
+import { getProfileImageDirectory } from './services/profile-image-service.js';
 import { getRenderOutputDirectory } from './services/render-asset-service.js';
 
 export function createApp(): Express {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '12mb' }));
+  app.use('/assets/profile-images', express.static(path.resolve(getProfileImageDirectory())));
   app.use('/assets/renders', express.static(path.resolve(getRenderOutputDirectory())));
 
   app.get('/health', (_req, res) => {

@@ -7,6 +7,8 @@ label { display: grid; gap: 4px; font-size: 14px; }
 input, select, button { min-height: 36px; padding: 6px 8px; font-size: 14px; }
 button { cursor: pointer; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.topbar-links { display: flex; gap: 12px; align-items: center; }
+.topbar-links h1 { margin: 0; }
 .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .workspace-list { display: grid; gap: 12px; }
 .workspace-card-link { color: inherit; text-decoration: none; }
@@ -28,4 +30,23 @@ button { cursor: pointer; }
 .flash { padding: 8px; border-radius: 6px; font-size: 14px; }
 .flash-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
 .flash-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+.muted { color: #4b5563; font-size: 14px; }
+.profile-image-block { display: flex; }
+.profile-image-preview, .profile-image-placeholder {
+  width: min(100%, 320px);
+  min-height: 320px;
+  object-fit: contain;
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+.profile-image-placeholder {
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  padding: 16px;
+  text-align: center;
+}
+.status-message[data-state="error"] { color: #991b1b; }
+.status-message[data-state="success"] { color: #065f46; }
 @media (max-width: 900px) { .grid-two, .render-row { grid-template-columns: 1fr; } }

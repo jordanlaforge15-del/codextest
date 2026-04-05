@@ -9,6 +9,7 @@ interface ClaimedRenderJob {
   workspaceId: string;
   renderMode: RenderMode;
   selectedItemIds: string[];
+  personImagePath: string | null;
 }
 
 interface LoadedRenderJob extends ClaimedRenderJob {
@@ -22,6 +23,7 @@ export interface RenderProcessorDependencies {
     workspace: Workspace;
     items: Item[];
     renderMode: RenderMode;
+    personImagePath: string | null;
   }): Promise<{ imageBase64: string; revisedPrompt: string | null }>;
   saveGeneratedRender(renderId: string, imageBase64: string): Promise<string>;
   markRenderComplete(
@@ -85,7 +87,8 @@ async function claimNextQueuedRender(): Promise<ClaimedRenderJob | null> {
     id: queuedRender.id,
     workspaceId: queuedRender.workspaceId,
     renderMode: queuedRender.renderMode,
-    selectedItemIds: parseSelectedItemIds(queuedRender.selectedItemIds)
+    selectedItemIds: parseSelectedItemIds(queuedRender.selectedItemIds),
+    personImagePath: queuedRender.personImagePath
   };
 }
 
@@ -141,6 +144,7 @@ async function loadRenderJob(renderId: string): Promise<LoadedRenderJob> {
     workspaceId: render.workspaceId,
     renderMode: render.renderMode,
     selectedItemIds,
+    personImagePath: render.personImagePath,
     workspace: {
       id: render.workspace.id,
       title: render.workspace.title,
@@ -198,7 +202,8 @@ export async function processClaimedRenderJob(
     const preview = await dependencies.generateRenderPreview({
       workspace: loadedJob.workspace,
       items: loadedJob.items,
-      renderMode: loadedJob.renderMode
+      renderMode: loadedJob.renderMode,
+      personImagePath: loadedJob.personImagePath
     });
     const outputImagePath = await dependencies.saveGeneratedRender(job.id, preview.imageBase64);
     await dependencies.markRenderComplete(job.id, {

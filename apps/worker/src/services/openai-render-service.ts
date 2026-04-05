@@ -52,12 +52,22 @@ export async function generateRenderPreview(params: {
   workspace: Workspace;
   items: Item[];
   renderMode: RenderMode;
+  personImagePath?: string | null;
 }): Promise<GeneratedRenderResult> {
   if (params.items.length < 2) {
     throw new Error('Render generation requires at least two input item images');
   }
 
   const uploadImages = [];
+  if (params.personImagePath) {
+    const personBytes = await readFile(params.personImagePath);
+    uploadImages.push(
+      await toFile(personBytes, path.basename(params.personImagePath), {
+        type: getMimeType(params.personImagePath)
+      })
+    );
+  }
+
   for (const item of params.items) {
     if (!item.storedImagePath) {
       throw new Error(`Item ${item.id} is missing storedImagePath`);
@@ -71,12 +81,15 @@ export async function generateRenderPreview(params: {
     );
   }
 
-  const prompt = `${buildRenderPrompt(params.workspace, params.items)}\nRequested quality mode: ${params.renderMode}.`;
+  const prompt = `${buildRenderPrompt(params.workspace, params.items, {
+    usePersonReference: Boolean(params.personImagePath)
+  })}\nRequested quality mode: ${params.renderMode}.`;
 
   console.log('[render-worker] sending prompt to OpenAI', {
     workspaceId: params.workspace.id,
     workspaceTitle: params.workspace.title,
     renderMode: params.renderMode,
+    personImagePath: params.personImagePath ?? null,
     itemIds: params.items.map((item) => item.id),
     prompt
   });

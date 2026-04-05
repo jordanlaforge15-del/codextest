@@ -10,7 +10,8 @@ describe('processClaimedRenderJob', () => {
         id: 'render-1',
         workspaceId: 'workspace-1',
         renderMode: 'preview',
-        selectedItemIds: ['item-1']
+        selectedItemIds: ['item-1'],
+        personImagePath: null
       },
       {
         loadRenderJob: async () => ({
@@ -18,11 +19,13 @@ describe('processClaimedRenderJob', () => {
           workspaceId: 'workspace-1',
           renderMode: 'preview',
           selectedItemIds: ['item-1'],
+          personImagePath: null,
           workspace: {
             id: 'workspace-1',
             title: 'Test',
             intentionText: null,
             domainType: 'outfit',
+            selectedItemIds: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           },
