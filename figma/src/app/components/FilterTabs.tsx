@@ -1,5 +1,4 @@
 import { RenderState } from './RenderTile';
-import { SidebarItem } from './SidebarItem';
 
 type FilterTab = 'all' | RenderState;
 
@@ -19,22 +18,36 @@ export function FilterTabs({ activeFilter, onFilterChange, counts }: FilterTabsP
     { id: 'all', label: 'All' },
     { id: 'yes', label: 'Yes' },
     { id: 'maybe', label: 'Maybe' },
-    { id: 'no', label: 'No' }
+    { id: 'no', label: 'No' },
   ];
 
   return (
-    <nav aria-label="Render filters" className="border-b border-gray-200">
-      <div className="flex gap-1">
-        {tabs.map((tab) => (
-          <SidebarItem
+    <div className="flex gap-1 border-b border-gray-200">
+      {tabs.map((tab) => {
+        const isActive = activeFilter === tab.id;
+        const count = counts[tab.id];
+
+        return (
+          <button
             key={tab.id}
-            active={activeFilter === tab.id}
-            count={counts[tab.id]}
-            label={tab.label}
             onClick={() => onFilterChange(tab.id)}
-          />
-        ))}
-      </div>
-    </nav>
+            className={`
+              px-4 py-2.5 text-sm font-medium transition-colors relative
+              ${
+                isActive
+                  ? 'text-gray-900'
+                  : 'text-gray-500 hover:text-gray-700'
+              }
+            `}
+          >
+            {tab.label}
+            <span className="ml-1.5 text-xs text-gray-400">({count})</span>
+            {isActive && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
