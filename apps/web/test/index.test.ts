@@ -154,6 +154,126 @@ test('GET /account renders profile image upload UI for authenticated users', asy
   }
 });
 
+test('GET /home renders the workspace gallery layout', async () => {
+  const originalFetch = globalThis.fetch;
+  const restore = mock.method(globalThis, 'fetch', async (input, init) => {
+    const url = String(input);
+    const isApiRequest = url.startsWith('http://localhost:4000/');
+
+    if (!isApiRequest) {
+      return originalFetch(input, init);
+    }
+
+    if (url.endsWith('/auth/me')) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            id: 'user-1',
+            email: 'user@example.com',
+            name: 'Jordan',
+            profileImageUrl: null,
+            createdAt: new Date().toISOString()
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (url.endsWith('/workspaces')) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'workspace-1',
+              title: 'Trail Running',
+              intentionText: null,
+              domainType: 'outfit',
+              selectedItemIds: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ]
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (url.endsWith('/workspaces/workspace-1/renders')) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 'render-1',
+              workspaceId: 'workspace-1',
+              status: 'complete',
+              renderMode: 'preview',
+              selectedItemIds: ['item-1'],
+              recommendationText: null,
+              recommendationLabel: null,
+              outputImagePath: '/tmp/render.png',
+              outputImageUrl: '/assets/renders/render-1.png',
+              errorMessage: null,
+              currentVote: 'neutral',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          ]
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    throw new Error(`Unexpected API fetch: ${url}`);
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/home`, {
+        headers: {
+          Cookie: 'mvp_auth_token=valid-token'
+        }
+      });
+      const text = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(text, /workspace-gallery/);
+      assert.match(text, /Create workspace/);
+      assert.match(text, /Trail Running/);
+      assert.doesNotMatch(text, /workspace-gallery__delete/);
+      assert.doesNotMatch(text, />Delete</);
+    });
+  } finally {
+    restore.mock.restore();
+  }
+});
+
+test('GET /workspace-renders.js omits role and slot metadata from readonly render item cards', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/workspace-renders.js`);
+    const text = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.doesNotMatch(text, /Role: \$\{item\.role\}/);
+    assert.doesNotMatch(text, /Slot: \$\{item\.slotType \|\| 'none'\}/);
+    assert.doesNotMatch(text, /View source/);
+    assert.match(text, /data-sidebar-item-id="\$\{item\.id\}"/);
+    assert.match(text, /card\.classList\.add\('is-expanded'\)/);
+    assert.match(text, /target\.closest\('\.sidebar-item-card__checkbox'\)/);
+  });
+});
+
+test('GET /styles.css preserves hidden sidebar views', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/styles.css`);
+    const text = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(text, /\.workspace-sidebar__view\[hidden\]\s*\{\s*display:\s*none;/);
+    assert.match(text, /\.workspace-sidebar\s*\{[\s\S]*align-content:\s*start;/);
+    assert.match(text, /\.workspace-sidebar\s*\{[\s\S]*grid-auto-rows:\s*max-content;/);
+  });
+});
+
 test('GET /workspaces/:id renders the figma-style workspace shell', async () => {
   const originalFetch = globalThis.fetch;
   const restore = mock.method(globalThis, 'fetch', async (input, init) => {
@@ -203,18 +323,22 @@ test('GET /workspaces/:id renders the figma-style workspace shell', async () => 
             {
               id: 'item-1',
               workspaceId: 'workspace-1',
-              sourceUrl: null,
-              pageUrl: null,
+              sourceUrl: 'https://example.com/item',
+              pageUrl: 'https://example.com/item',
               imageUrl: 'https://example.com/item.jpg',
               storedImagePath: '/tmp/item.jpg',
               title: 'Capilene Shirt',
               brand: null,
-              merchant: null,
+              merchant: 'Patagonia',
               price: null,
               currency: null,
               slotType: 'shirt',
               role: 'candidate',
-              metadataJson: {},
+              metadataJson: {
+                captureContext: {
+                  altText: 'Lightweight technical base layer for trail runs'
+                }
+              },
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             }
@@ -261,10 +385,25 @@ test('GET /workspaces/:id renders the figma-style workspace shell', async () => 
       const text = await response.text();
 
       assert.equal(response.status, 200);
-      assert.match(text, /workspace-hero/);
+      assert.match(text, /workspace-layout/);
       assert.match(text, /workspace-filter-tabs/);
       assert.match(text, /data-render-card/);
+      assert.match(text, /data-render-inspect/);
+      assert.match(text, /app-header__actions--workspace/);
+      assert.match(text, /data-render-narrow/);
+      assert.match(text, /data-sidebar-view="default"/);
+      assert.match(text, /Items &amp; Renders/);
       assert.match(text, /workspace-renders\.js/);
+      assert.match(text, /Brand/);
+      assert.match(text, /Patagonia/);
+      assert.match(text, /Description/);
+      assert.match(text, /Lightweight technical base layer for trail runs/);
+      assert.doesNotMatch(text, /sidebar-item-card__status/);
+      assert.doesNotMatch(text, /Role: /);
+      assert.doesNotMatch(text, /Slot: /);
+      assert.doesNotMatch(text, /workspace-hero/);
+      assert.doesNotMatch(text, /href="\/account"/);
+      assert.doesNotMatch(text, /action="\/logout"/);
     });
   } finally {
     restore.mock.restore();

@@ -1,5 +1,5 @@
 (function () {
-  const form = document.querySelector('[data-workspace-form]');
+  const form = document.querySelector('[data-workspace-selection-form]');
   if (!(form instanceof HTMLFormElement)) {
     return;
   }
@@ -10,6 +10,7 @@
   }
 
   const storageKey = `workspace-selected-items:${workspaceId}`;
+  const submitButton = form.querySelector('button[type="submit"]');
 
   function getSelectedItemIdsFromForm() {
     return Array.from(form.querySelectorAll('input[data-selected-item-checkbox]:checked'))
@@ -40,6 +41,13 @@
     for (const checkbox of form.querySelectorAll('input[data-selected-item-checkbox]')) {
       checkbox.checked = selectedSet.has(checkbox.value);
     }
+    updateSubmitState();
+  }
+
+  function updateSubmitState() {
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = getSelectedItemIdsFromForm().length === 0;
+    }
   }
 
   const localSelection = readLocalSelection();
@@ -47,6 +55,7 @@
     applySelection(localSelection);
   } else {
     writeLocalSelection(getSelectedItemIdsFromForm());
+    updateSubmitState();
   }
 
   async function persistSelectedItems() {
@@ -88,5 +97,9 @@
       writeLocalSelection(getSelectedItemIdsFromForm());
       window.alert(error instanceof Error ? error.message : 'Failed to save selected items.');
     }
+  });
+
+  form.addEventListener('submit', () => {
+    writeLocalSelection([]);
   });
 })();
