@@ -137,6 +137,35 @@ function getItemOriginalUrl(item: Item): string | null {
   return item.pageUrl ?? item.sourceUrl ?? null;
 }
 
+function getItemBrand(item: Pick<Item, 'brand' | 'merchant'>): string | null {
+  return item.brand?.trim() || item.merchant?.trim() || null;
+}
+
+function getItemDescription(item: Item): string | null {
+  const metadata = item.metadataJson ?? {};
+  const captureContext =
+    typeof metadata.captureContext === 'object' && metadata.captureContext
+      ? (metadata.captureContext as Record<string, unknown>)
+      : null;
+  const candidates = [
+    metadata.description,
+    metadata.summary,
+    typeof metadata.extraction === 'object' && metadata.extraction
+      ? (metadata.extraction as Record<string, unknown>).description
+      : null,
+    captureContext?.surroundingText,
+    captureContext?.altText
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
 function parseSelectedItemIds(raw: unknown): string[] {
   if (typeof raw === 'string') {
     return [raw];
@@ -208,10 +237,168 @@ function renderSelectedItemsSummary(render: Render, items: Item[]): string {
     .join('')}</div>`;
 }
 
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function formatRelativeTime(value: string): string {
+  const deltaSeconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000));
+  if (deltaSeconds < 60) return 'just now';
+  const minutes = Math.floor(deltaSeconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function renderSidebarItemCard(
+  item: Item,
+  params: { workspaceId?: string; readonly?: boolean; selected?: boolean } = {}
+): string {
+  const originalUrl = getItemOriginalUrl(item);
+  const readonly = params.readonly ?? false;
+  const brand = getItemBrand(item);
+  const description = getItemDescription(item);
+  const hasDetails = Boolean(brand || description || originalUrl);
+
+  return `
+    <article class="sidebar-item-card${readonly ? ' sidebar-item-card--readonly' : ''}" data-sidebar-item-id="${item.id}">
+      ${
+        readonly
+          ? ''
+          : `<label class="sidebar-item-card__checkbox">
+              <input
+                type="checkbox"
+                name="selectedItemIds"
+                value="${item.id}"
+                data-selected-item-checkbox
+                ${params.selected ? 'checked' : ''}
+              />
+              <span aria-hidden="true"></span>
+            </label>`
+      }
+      <div class="sidebar-item-card__thumb">
+        ${
+          item.imageUrl
+            ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || 'item')}" />`
+            : '<div class="sidebar-item-card__thumb-placeholder">No image</div>'
+        }
+      </div>
+      <div class="sidebar-item-card__content">
+        <div class="sidebar-item-card__title-row">
+          ${
+            originalUrl
+              ? `<a href="${escapeHtml(originalUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || 'Untitled item')}</a>`
+              : `<strong>${escapeHtml(item.title || 'Untitled item')}</strong>`
+          }
+        </div>
+        ${
+          brand
+            ? `<p class="sidebar-item-card__subtle">${escapeHtml(brand)}</p>`
+            : ''
+        }
+        ${
+          hasDetails
+            ? `
+              <div class="sidebar-item-card__details" data-sidebar-item-details hidden>
+                <div class="sidebar-item-card__details-body">
+                  ${
+                    brand
+                      ? `<div><p class="sidebar-item-card__details-label">Brand</p><p class="sidebar-item-card__details-copy">${escapeHtml(brand)}</p></div>`
+                      : ''
+                  }
+                  ${
+                    description
+                      ? `<div><p class="sidebar-item-card__details-label">Description</p><p class="sidebar-item-card__details-copy">${escapeHtml(description)}</p></div>`
+                      : ''
+                  }
+                </div>
+              </div>
+            `
+            : ''
+        }
+      </div>
+      <div class="sidebar-item-card__actions">
+        ${
+          hasDetails
+            ? `<button type="button" class="sidebar-item-card__icon-button" data-sidebar-item-expand aria-expanded="false" aria-label="Toggle item details">⌄</button>`
+            : ''
+        }
+        ${
+          readonly || !params.workspaceId
+            ? ''
+            : `
+              <button
+                type="submit"
+                class="sidebar-item-card__icon-button sidebar-item-card__icon-button--danger"
+                formaction="/workspaces/${params.workspaceId}/items/${item.id}/delete"
+                formmethod="post"
+                aria-label="Delete item"
+              >
+                ✕
+              </button>
+            `
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderRenderJobList(renders: Render[]): string {
+  const recentJobs = renders
+    .slice()
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+    .slice(0, 6);
+
+  if (recentJobs.length === 0) {
+    return '';
+  }
+
+  return `
+    <section class="workspace-sidebar__section">
+      <div class="workspace-sidebar__section-header">
+        <h3>Render Jobs</h3>
+      </div>
+      <div class="render-job-list">
+        ${recentJobs
+          .map((render) => {
+            const statusLabel =
+              render.status === 'queued'
+                ? 'Queued'
+                : render.status === 'processing'
+                  ? 'In Progress'
+                  : render.status === 'complete'
+                    ? 'Completed'
+                    : 'Failed';
+
+            return `
+              <article class="render-job-card render-job-card--${render.status}">
+                <div class="render-job-card__status-row">
+                  <strong>${statusLabel}</strong>
+                  <span>${render.selectedItemIds.length} item${render.selectedItemIds.length === 1 ? '' : 's'}</span>
+                </div>
+                <p>${new Date(render.createdAt).toLocaleString()}</p>
+                ${
+                  render.status === 'failed' && render.errorMessage
+                    ? `<p class="render-job-card__error">${escapeHtml(render.errorMessage)}</p>`
+                    : ''
+                }
+                <time datetime="${escapeHtml(render.createdAt)}">${escapeHtml(formatRelativeTime(render.createdAt))}</time>
+              </article>
+            `;
+          })
+          .join('')}
+      </div>
+    </section>
+  `;
+}
+
 function renderWorkspaceRenderCard(render: Render): string {
   const imageUrl = resolveAssetUrl(apiBaseUrl, render.outputImageUrl);
   const browserState = getRenderBrowserState(render);
   const statusLabel = render.renderMode === 'high_quality' ? 'High quality' : 'Preview';
+  const renderStatus = render.status === 'processing' ? 'In Progress' : render.status;
 
   return `
     <article
@@ -220,7 +407,10 @@ function renderWorkspaceRenderCard(render: Render): string {
       data-render-id="${render.id}"
       data-render-state="${browserState}"
       data-render-vote="${render.currentVote ?? ''}"
+      data-render-label="${escapeHtml(render.recommendationLabel || statusLabel)}"
+      data-render-selected-item-ids='${escapeHtml(JSON.stringify(render.selectedItemIds))}'
     >
+      <button type="button" class="workspace-render-card__inspect" data-render-inspect aria-label="Show items used in this render">i</button>
       <button
         type="button"
         class="workspace-render-card__button"
@@ -237,8 +427,8 @@ function renderWorkspaceRenderCard(render: Render): string {
           }
         </span>
         <span class="workspace-render-card__meta">
-          <strong>${escapeHtml(statusLabel)} render</strong>
-          <span>${new Date(render.createdAt).toLocaleString()}</span>
+          <strong>${escapeHtml(render.recommendationLabel || statusLabel)}</strong>
+          <span>${escapeHtml(renderStatus)} · ${new Date(render.createdAt).toLocaleString()}</span>
         </span>
       </button>
     </article>
@@ -252,124 +442,134 @@ function renderWorkspacePage(params: {
   flash: Flash;
 }): string {
   const visibleRenders = params.renders.filter((render) => render.status !== 'failed');
+  const sidebarItemsPayload = params.items.map((item) => ({
+    id: item.id,
+    title: item.title || 'Untitled item',
+    imageUrl: item.imageUrl,
+    originalUrl: getItemOriginalUrl(item),
+    role: item.role,
+    slotType: item.slotType || 'none',
+    brand: getItemBrand(item),
+    merchant: item.merchant,
+    description: getItemDescription(item)
+  }));
 
   return htmlPage(
     `${params.workspace.title} · Workspace`,
     `
-      <div class="workspace-shell">
-        <header class="workspace-shell__topbar">
-          <div class="topbar-links">
-            <a href="/home">← Home</a>
-            <a href="/account">Account</a>
+      <div class="workspace-page">
+        <header class="app-header">
+          <div class="app-header__brand">
+            <a class="app-header__back" href="/home" aria-label="Back to home">←</a>
+            <div class="app-header__mark" aria-hidden="true">✦</div>
+            <div class="app-header__copy">
+              <h1>${escapeHtml(params.workspace.title)}</h1>
+              <p>${escapeHtml(params.workspace.intentionText || 'Select your favorites')}</p>
+            </div>
           </div>
-          <form method="post" action="/logout"><button type="submit">Log out</button></form>
+          <div class="app-header__actions app-header__actions--workspace">
+            <button type="button" class="workspace-action workspace-action--secondary" data-render-undo hidden>Undo</button>
+            <button type="button" class="workspace-action workspace-action--primary" data-render-narrow disabled>Narrow Down</button>
+          </div>
         </header>
 
-        <form
-          method="post"
-          action="/workspaces/${params.workspace.id}/renders"
-          class="workspace-form"
-          data-workspace-form
-          data-workspace-id="${params.workspace.id}"
-        >
-          <header class="workspace-hero">
-            <div class="workspace-hero__identity">
-              <div class="workspace-hero__mark" aria-hidden="true">✦</div>
-              <div class="workspace-hero__copy">
-                <h1>${escapeHtml(params.workspace.title)}</h1>
-                <p>${escapeHtml(params.workspace.intentionText || 'Select your favorites and request the next render.')}</p>
-              </div>
-            </div>
-            <div class="workspace-hero__actions">
-              <button type="button" class="workspace-action workspace-action--secondary" data-render-undo hidden>Undo</button>
-              <button type="button" class="workspace-action workspace-action--primary" data-render-narrow disabled>Narrow Down</button>
-            </div>
-          </header>
+        ${flashMarkup(params.flash)}
 
-          ${flashMarkup(params.flash)}
-        </form>
-
-        <section class="workspace-renders-browser panel" data-render-browser data-workspace-id="${params.workspace.id}">
-          <nav class="workspace-filter-tabs" aria-label="Render filters">
-            <button type="button" class="workspace-filter-tab is-active" data-render-filter="all">All <span data-render-count="all">0</span></button>
-            <button type="button" class="workspace-filter-tab" data-render-filter="yes">Yes <span data-render-count="yes">0</span></button>
-            <button type="button" class="workspace-filter-tab" data-render-filter="maybe">Maybe <span data-render-count="maybe">0</span></button>
-            <button type="button" class="workspace-filter-tab" data-render-filter="no">No <span data-render-count="no">0</span></button>
-          </nav>
-          ${
-            visibleRenders.length > 0
-              ? `
-                  <div class="workspace-render-grid" data-render-grid>${visibleRenders
-                    .map((render) => renderWorkspaceRenderCard(render))
-                    .join('')}</div>
-                  <div class="workspace-empty-state" data-render-empty hidden>
-                    <div class="workspace-empty-state__icon" aria-hidden="true">✦</div>
-                    <p>No renders in this category.</p>
-                    <button type="button" class="workspace-action workspace-action--link" data-render-reset>View all renders</button>
-                  </div>
-                `
-              : `
-                  <div class="workspace-empty-state" data-render-empty>
-                    <div class="workspace-empty-state__icon" aria-hidden="true">✦</div>
-                    <p>No renders in this category.</p>
-                    <button type="button" class="workspace-action workspace-action--link" data-render-reset>View all renders</button>
-                  </div>
-                `
-          }
-        </section>
-
-        <form
-          method="post"
-          action="/workspaces/${params.workspace.id}/renders"
-          class="workspace-items-panel panel"
-          data-workspace-form
-          data-workspace-id="${params.workspace.id}"
-        >
-          <div class="workspace-items-panel__header">
-            <div>
-              <h2>Source Items</h2>
-              <p>Selected items are used to request a render.</p>
-            </div>
-            <p><strong>Total items:</strong> ${params.items.length}</p>
-          </div>
-          ${
-            params.items.length === 0
-              ? '<p class="empty">No items in this workspace yet.</p>'
-              : `<div class="workspace-items-grid">${params.items
-                  .map(
-                    (item) => `
-                      <label class="workspace-item-card">
-                        <input type="checkbox" name="selectedItemIds" value="${item.id}" data-selected-item-checkbox ${params.workspace.selectedItemIds.includes(item.id) ? 'checked' : ''} />
-                        <span class="workspace-item-card__body">
-                          <span class="workspace-item-card__summary">${renderItemSummaryContent(item)}</span>
-                          <button
-                            type="submit"
-                            class="workspace-item-card__delete"
-                            formaction="/workspaces/${params.workspace.id}/items/${item.id}/delete"
-                            formmethod="post"
-                          >
-                            Delete
-                          </button>
-                        </span>
-                      </label>
+        <div class="workspace-layout">
+          <section class="workspace-main">
+            <section class="workspace-renders-browser panel" data-render-browser data-workspace-id="${params.workspace.id}">
+              <nav class="workspace-filter-tabs" aria-label="Render filters">
+                <button type="button" class="workspace-filter-tab is-active" data-render-filter="all">All <span data-render-count="all">0</span></button>
+                <button type="button" class="workspace-filter-tab" data-render-filter="yes">Yes <span data-render-count="yes">0</span></button>
+                <button type="button" class="workspace-filter-tab" data-render-filter="maybe">Maybe <span data-render-count="maybe">0</span></button>
+                <button type="button" class="workspace-filter-tab" data-render-filter="no">No <span data-render-count="no">0</span></button>
+              </nav>
+              ${
+                visibleRenders.length > 0
+                  ? `
+                      <div class="workspace-render-grid" data-render-grid>${visibleRenders
+                        .map((render) => renderWorkspaceRenderCard(render))
+                        .join('')}</div>
+                      <div class="workspace-empty-state" data-render-empty hidden>
+                        <div class="workspace-empty-state__icon" aria-hidden="true">✦</div>
+                        <p>No renders in this category.</p>
+                        <button type="button" class="workspace-action workspace-action--link" data-render-reset>View all renders</button>
+                      </div>
                     `
-                  )
-                  .join('')}</div>`
-          }
-          <div class="workspace-items-panel__footer">
-            <label class="workspace-render-mode">
-              <span>Render mode</span>
-              <select name="renderMode">
-                <option value="preview">Preview</option>
-                <option value="high_quality">High Quality</option>
-              </select>
-            </label>
-            <button type="submit" class="workspace-action workspace-action--primary" ${params.items.length === 0 ? 'disabled' : ''}>
-              Request render
-            </button>
-          </div>
-        </form>
+                  : `
+                      <div class="workspace-empty-state" data-render-empty>
+                        <div class="workspace-empty-state__icon" aria-hidden="true">✦</div>
+                        <p>No renders in this category.</p>
+                        <button type="button" class="workspace-action workspace-action--link" data-render-reset>View all renders</button>
+                      </div>
+                    `
+              }
+            </section>
+          </section>
+
+          <button type="button" class="workspace-sidebar-toggle" data-sidebar-open-toggle aria-label="Open sidebar">←</button>
+
+          <aside class="workspace-sidebar panel is-closed" data-workspace-sidebar>
+            <div class="workspace-sidebar__header">
+              <div class="workspace-sidebar__header-copy">
+                <h2 data-sidebar-heading>Items &amp; Renders</h2>
+              </div>
+              <button type="button" class="workspace-sidebar__close" data-sidebar-close aria-label="Close sidebar">→</button>
+            </div>
+            <section class="workspace-sidebar__view" data-sidebar-view="default">
+              <div class="workspace-sidebar__section-header">
+                <h2>Items</h2>
+                <p>${params.items.length} items</p>
+              </div>
+              <form
+                method="post"
+                action="/workspaces/${params.workspace.id}/renders"
+                class="workspace-sidebar__form"
+                data-workspace-selection-form
+                data-workspace-id="${params.workspace.id}"
+              >
+                ${
+                  params.items.length === 0
+                    ? '<p class="empty">No items in this workspace yet.</p>'
+                    : `<div class="workspace-sidebar__item-list">${params.items
+                        .map((item) =>
+                          renderSidebarItemCard(item, {
+                            workspaceId: params.workspace.id,
+                            selected: params.workspace.selectedItemIds.includes(item.id)
+                          })
+                        )
+                        .join('')}</div>`
+                }
+                <div class="workspace-sidebar__controls">
+                  <label class="workspace-render-mode">
+                    <span>Render mode</span>
+                    <select name="renderMode">
+                      <option value="preview">Preview</option>
+                      <option value="high_quality">High Quality</option>
+                    </select>
+                  </label>
+                  <button type="submit" class="workspace-action workspace-action--primary" ${params.items.length === 0 ? 'disabled' : ''}>
+                    Request Render
+                  </button>
+                </div>
+              </form>
+              ${renderRenderJobList(params.renders)}
+            </section>
+
+            <section class="workspace-sidebar__view workspace-sidebar__view--detail" data-sidebar-view="detail" hidden>
+              <div class="workspace-sidebar__detail-header">
+                <button type="button" class="workspace-action workspace-action--ghost" data-sidebar-back>← Back</button>
+                <div class="workspace-sidebar__detail-copy">
+                  <h2 data-sidebar-detail-title>Render details</h2>
+                  <p data-sidebar-detail-subtitle>Items used in this render</p>
+                </div>
+              </div>
+              <div class="workspace-sidebar__detail-items" data-sidebar-detail-items></div>
+            </section>
+          </aside>
+        </div>
       </div>
+      <script type="application/json" data-sidebar-items-json>${jsonForScript(sidebarItemsPayload)}</script>
       <script src="/workspace-selection.js"></script>
       <script src="/workspace-renders.js"></script>
     `
@@ -431,32 +631,85 @@ function renderWorkspaceList(params: {
     return '<p class="empty">No workspaces yet.</p>';
   }
 
-  return `<div class="workspace-list">${params.workspaces
+  return `<div class="workspace-gallery">${params.workspaces
     .map((workspace) => {
       const thumbnailUrl = resolveAssetUrl(
         apiBaseUrl,
         getPreferredWorkspaceThumbnail(params.rendersByWorkspaceId.get(workspace.id) ?? [])
       );
+      const renderCount = (params.rendersByWorkspaceId.get(workspace.id) ?? []).length;
 
       return `
-        <article class="workspace-card">
-          <a class="workspace-card-link" href="/workspaces/${workspace.id}">
-            ${
-              thumbnailUrl
-                ? `<img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(workspace.title)} thumbnail" />`
-                : '<div class="workspace-card-placeholder" aria-hidden="true">No preview</div>'
-            }
-            <div>
+        <article class="workspace-gallery__card">
+          <a class="workspace-gallery__link" href="/workspaces/${workspace.id}">
+            <div class="workspace-gallery__media">
+              ${
+                thumbnailUrl
+                  ? `<img src="${escapeHtml(thumbnailUrl)}" alt="${escapeHtml(workspace.title)} thumbnail" />`
+                  : '<div class="workspace-gallery__placeholder" aria-hidden="true">No preview</div>'
+              }
+            </div>
+            <div class="workspace-gallery__meta">
               <strong>${escapeHtml(workspace.title)}</strong>
+              <span>${renderCount} render${renderCount === 1 ? '' : 's'}</span>
             </div>
           </a>
-          <form method="post" action="/home/workspaces/${workspace.id}/delete">
-            <button type="submit">Delete</button>
-          </form>
         </article>
       `;
     })
     .join('')}</div>`;
+}
+
+function renderHomePage(params: {
+  workspaces: Workspace[];
+  rendersByWorkspaceId: Map<string, Render[]>;
+  flash: Flash;
+}): string {
+  return htmlPage(
+    'Home',
+    `
+      <div class="home-page">
+        <header class="app-header">
+          <div class="app-header__brand">
+            <div class="app-header__mark" aria-hidden="true">✦</div>
+            <div class="app-header__copy">
+              <h1>Lookbook</h1>
+              <p>Select a workspace to review and curate renders.</p>
+            </div>
+          </div>
+          <div class="app-header__actions">
+            <a class="app-header__account" href="/account">Account</a>
+            <form method="post" action="/logout"><button type="submit">Log out</button></form>
+          </div>
+        </header>
+
+        <section class="page-intro">
+          <div>
+            <h2>Workspaces</h2>
+            <p>Choose a workspace to continue narrowing down your render directions.</p>
+          </div>
+        </section>
+
+        ${flashMarkup(params.flash)}
+
+        <section class="home-workspaces">
+          ${renderWorkspaceList(params)}
+        </section>
+
+        <section class="panel create-workspace-panel">
+          <div class="create-workspace-panel__copy">
+            <h2>Create workspace</h2>
+            <p>Start a new workspace to collect items and generate render options.</p>
+          </div>
+          <form method="post" action="/home/workspaces" class="create-workspace-form">
+            <label>Title<input name="title" required /></label>
+            <label>Intention text (optional)<input name="intentionText" /></label>
+            <button type="submit">Create workspace</button>
+          </form>
+        </section>
+      </div>
+    `
+  );
 }
 
 export function createApp(): Express {
@@ -634,33 +887,13 @@ export function createApp(): Express {
           })
         )
       );
+      const flash = req.query.error
+        ? { type: 'error' as const, message: String(req.query.error) }
+        : req.query.success
+          ? { type: 'success' as const, message: String(req.query.success) }
+          : null;
 
-      res.send(
-        htmlPage(
-          'Home',
-          `
-          <header class="topbar">
-            <div class="topbar-links">
-              <h1>Workspaces</h1>
-              <a href="/account">Account</a>
-            </div>
-            <form method="post" action="/logout"><button type="submit">Log out</button></form>
-          </header>
-          <section class="panel">
-            <h2>Existing workspaces</h2>
-            ${renderWorkspaceList({ workspaces, rendersByWorkspaceId })}
-          </section>
-          <section class="panel stack">
-            <h2>Create workspace</h2>
-            <form method="post" action="/home/workspaces" class="stack">
-              <label>Title<input name="title" required /></label>
-              <label>Intention text (optional)<input name="intentionText" /></label>
-              <button type="submit">Create workspace</button>
-            </form>
-          </section>
-        `
-        )
-      );
+      res.send(renderHomePage({ workspaces, rendersByWorkspaceId, flash }));
     } catch {
       res.status(500).send(htmlPage('Home', '<p>Failed to load workspaces.</p>'));
     }
@@ -874,6 +1107,17 @@ export function createApp(): Express {
           body: JSON.stringify({
             selectedItemIds,
             renderMode: req.body.renderMode === 'high_quality' ? 'high_quality' : 'preview'
+          })
+        },
+        token
+      );
+
+      await fetchApi(
+        `/workspaces/${workspaceId}/selected-items`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            selectedItemIds: []
           })
         },
         token

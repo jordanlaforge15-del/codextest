@@ -3,11 +3,12 @@ FROM node:20
 WORKDIR /workspace/codextest
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends bubblewrap \
+    && apt-get install -y --no-install-recommends bubblewrap xauth \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Codex CLI in the development container.
-RUN npm install -g @openai/codex
+RUN npm install -g @openai/codex @playwright/test playwright \
+    && playwright install --with-deps chromium
 
 # Keep the container running for interactive Codex/dev shell usage.
 CMD ["sleep", "infinity"]
